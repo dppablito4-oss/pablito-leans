@@ -70,18 +70,30 @@
 
     <!-- STATE 3: Result -->
     <section class="result-zone hidden" id="result-zone" aria-label="Resultado del escaneo">
-      <div class="result-badge">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-        Escaneo completado
+      <div class="result-top-row">
+        <div class="result-badge">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          Escaneo completado
+        </div>
+        <span class="page-counter hidden" id="page-counter">1 / 1</span>
+      </div>
+
+      <!-- Pages thumbnail strip -->
+      <div class="pages-strip hidden" id="pages-strip">
+        <div class="pages-strip__list" id="pages-strip-list"></div>
       </div>
 
       <!-- Filter selector -->
       <div class="filter-selector" id="filter-selector">
-        <button class="filter-option active" data-filter="bw" id="filter-bw">B&amp;N</button>
+        <button class="filter-option active" data-filter="color" id="filter-color">Color</button>
+        <button class="filter-option" data-filter="document" id="filter-document">Documento</button>
+        <button class="filter-option" data-filter="whiteboard" id="filter-whiteboard">Pizarra</button>
         <button class="filter-option" data-filter="gray" id="filter-gray">Grises</button>
-        <button class="filter-option" data-filter="color" id="filter-color">Color</button>
+        <button class="filter-option" data-filter="sepia" id="filter-sepia">Sepia</button>
+        <button class="filter-option" data-filter="sketch" id="filter-sketch">Boceto</button>
+        <button class="filter-option" data-filter="highcontrast" id="filter-highcontrast">Alto Contraste</button>
       </div>
 
       <div class="result-canvas-wrapper">
@@ -113,25 +125,43 @@
 
     <!-- Result controls -->
     <div id="result-controls" class="hidden">
-      <button class="btn btn-secondary" id="btn-readjust" type="button">
+      <button class="btn btn-secondary" id="btn-add-page" type="button" title="Agregar otra página">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="1 4 1 10 7 10"/>
-          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="12" y1="18" x2="12" y2="12"/>
+          <line x1="9" y1="15" x2="15" y2="15"/>
         </svg>
-        Re-ajustar
+        + Página
       </button>
-      <button class="btn btn-primary" id="btn-download" type="button">
+      <button class="btn btn-danger" id="btn-delete-page" type="button" title="Eliminar página actual">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+      </button>
+      <button class="btn btn-primary" id="btn-download" type="button" title="Descargar imágenes">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        Descargar
+        IMG
       </button>
-      <button class="btn btn-secondary" id="btn-new-scan" type="button">
+      <button class="btn btn-primary" id="btn-download-pdf" type="button" title="Descargar como PDF">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        PDF
+      </button>
+      <button class="btn btn-secondary" id="btn-new-scan" type="button" title="Nuevo escaneo (borrar todo)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
         </svg>
         Nuevo
       </button>

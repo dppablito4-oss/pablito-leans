@@ -387,6 +387,103 @@ button {
   font-weight: 500;
 }
 
+/* Result top row: badge + page counter */
+.result-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.page-counter {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================
+   PAGES STRIP (Multi-page thumbnails)
+   ============================================ */
+.pages-strip {
+  width: 100%;
+  max-width: 100%;
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+}
+
+.pages-strip__list {
+  display: flex;
+  gap: var(--space-sm);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+  padding: var(--space-xs) 0;
+}
+
+.pages-strip__list::-webkit-scrollbar {
+  display: none;
+}
+
+.page-thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  background: var(--bg-secondary);
+  scroll-snap-align: start;
+}
+
+.page-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.page-thumb:hover {
+  border-color: var(--text-muted);
+  transform: scale(1.05);
+}
+
+.page-thumb.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.page-thumb__label {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  border-radius: 50%;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 /* ============================================
    CONTROLS BAR
    ============================================ */
@@ -615,6 +712,16 @@ button {
   padding: var(--space-xs);
   border-radius: var(--radius-full);
   border: 1px solid var(--glass-border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  max-width: 100%;
+  position: relative;
+}
+
+.filter-selector::-webkit-scrollbar {
+  display: none;
 }
 
 .filter-option {
@@ -624,6 +731,9 @@ button {
   color: var(--text-secondary);
   border-radius: var(--radius-full);
   transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+  scroll-snap-align: start;
 }
 
 .filter-option:hover {
@@ -714,8 +824,20 @@ button {
   }
 
   .btn {
-    padding: 8px 14px;
-    font-size: 0.8125rem;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    gap: var(--space-xs);
+  }
+
+  .page-thumb {
+    width: 56px;
+    height: 56px;
+  }
+
+  .page-thumb__label {
+    width: 16px;
+    height: 16px;
+    font-size: 0.5625rem;
   }
 }
 

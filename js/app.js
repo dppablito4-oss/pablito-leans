@@ -1,6 +1,6 @@
 /**
  * app.js — Main Application Orchestrator
- * Manages UI states, file handling, and coordinates Scanner + Corners modules.
+ * Manages UI states, multi-page scanning, and coordinates Scanner + Corners modules.
  */
 
 const App = (() => {
@@ -10,9 +10,14 @@ const App = (() => {
   let currentState = 'upload'; // 'upload' | 'editor' | 'result'
   let originalImage = null;    // HTMLImageElement
   let originalMat = null;      // cv.Mat of the original image
-  let warpedMat = null;        // cv.Mat of the warped result
-  let currentFilter = 'bw';
+  let warpedMat = null;        // cv.Mat of the warped result (current page being edited)
+  let currentFilter = 'color';
   let opencvReady = false;
+
+  // Multi-page state
+  // Each page: { dataUrl: string, width: number, height: number, filter: string }
+  let scannedPages = [];
+  let activePageIndex = -1; // Index of the page currently shown in canvasOutput
 
   // ======== DOM Elements ========
   const dom = {};
@@ -28,9 +33,11 @@ const App = (() => {
     dom.btnSelectFile = document.getElementById('btn-select-file');
     dom.btnCancel = document.getElementById('btn-cancel');
     dom.btnScan = document.getElementById('btn-scan');
-    dom.btnReadjust = document.getElementById('btn-readjust');
     dom.btnDownload = document.getElementById('btn-download');
+    dom.btnDownloadPdf = document.getElementById('btn-download-pdf');
     dom.btnNewScan = document.getElementById('btn-new-scan');
+    dom.btnAddPage = document.getElementById('btn-add-page');
+    dom.btnDeletePage = document.getElementById('btn-delete-page');
     dom.canvasInput = document.getElementById('canvasInput');
     dom.canvasOverlay = document.getElementById('canvasOverlay');
     dom.canvasOutput = document.getElementById('canvasOutput');
@@ -39,6 +46,9 @@ const App = (() => {
     dom.toastContainer = document.getElementById('toast-container');
     dom.filterSelector = document.getElementById('filter-selector');
     dom.filterBtns = document.querySelectorAll('.filter-option');
+    dom.pagesStrip = document.getElementById('pages-strip');
+    dom.pagesStripList = document.getElementById('pages-strip-list');
+    dom.pageCounter = document.getElementById('page-counter');
   }
 
   // ======== Initialization ========
@@ -55,10 +65,9 @@ const App = (() => {
 
   function onOpenCvReady() {
     opencvReady = true;
-    // Fade out the loader
     dom.opencvLoader.classList.add('hidden');
     showToast('Motor de visión listo', 'success');
-    console.log('[App] OpenCV ready, version:', cv.getBuildInformation ? 'available' : 'loaded');
+    console.log('[App] OpenCV ready');
   }
 
   // ======== Event Binding ========
@@ -98,11 +107,13 @@ const App = (() => {
     });
 
     // Action buttons
-    dom.btnCancel.addEventListener('click', goToUpload);
+    dom.btnCancel.addEventListener('click', handleCancel);
     dom.btnScan.addEventListener('click', performScan);
-    dom.btnReadjust.addEventListener('click', goToEditor);
-    dom.btnDownload.addEventListener('click', downloadResult);
+    dom.btnDownload.addEventListener('click', downloadAllImages);
+    dom.btnDownloadPdf.addEventListener('click', downloadPdf);
     dom.btnNewScan.addEventListener('click', goToUpload);
+    dom.btnAddPage.addEventListener('click', addAnotherPage);
+    dom.btnDeletePage.addEventListener('click', deleteActivePage);
 
     // Filter buttons
     dom.filterBtns.forEach(btn => {
@@ -112,7 +123,7 @@ const App = (() => {
         currentFilter = filter;
         dom.filterBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        applyCurrentFilter();
+        reapplyFilterToActivePage();
       });
     });
   }
@@ -129,7 +140,6 @@ const App = (() => {
     }
 
     loadImage(file);
-    // Reset input so same file can be re-selected
     dom.fileInput.value = '';
   }
 
@@ -162,7 +172,6 @@ const App = (() => {
   function setState(state) {
     currentState = state;
 
-    // Hide all zones
     dom.uploadZone.classList.add('hidden');
     dom.editorZone.classList.add('hidden');
     dom.resultZone.classList.add('hidden');
@@ -193,17 +202,27 @@ const App = (() => {
     cleanupMats();
     Corners.destroy();
     originalImage = null;
-    currentFilter = 'bw';
-
-    // Reset filter buttons
-    dom.filterBtns.forEach(b => b.classList.remove('active'));
-    document.getElementById('filter-bw').classList.add('active');
-
+    scannedPages = [];
+    activePageIndex = -1;
+    resetFilterUI();
+    renderPagesStrip();
     setState('upload');
   }
 
+  function handleCancel() {
+    // If there are already scanned pages, go back to result view
+    if (scannedPages.length > 0) {
+      cleanupMats();
+      Corners.destroy();
+      originalImage = null;
+      showActivePage();
+      setState('result');
+    } else {
+      goToUpload();
+    }
+  }
+
   function goToEditor() {
-    // Clean up previous warped result
     if (warpedMat) {
       warpedMat.delete();
       warpedMat = null;
@@ -222,21 +241,17 @@ const App = (() => {
     const imgW = img.naturalWidth;
     const imgH = img.naturalHeight;
 
-    // Calculate display size (fit within container)
     const wrapper = dom.canvasWrapper;
     const maxDisplayWidth = wrapper.clientWidth;
     const scale = Math.min(maxDisplayWidth / imgW, 1);
     const displayW = Math.round(imgW * scale);
     const displayH = Math.round(imgH * scale);
 
-    // Setup input canvas
     dom.canvasInput.width = displayW;
     dom.canvasInput.height = displayH;
     const ctxInput = dom.canvasInput.getContext('2d');
     ctxInput.drawImage(img, 0, 0, displayW, displayH);
 
-    // Read original image into OpenCV Mat (at full resolution)
-    // We create a temporary canvas at full resolution for the Mat
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = imgW;
     tempCanvas.height = imgH;
@@ -246,13 +261,11 @@ const App = (() => {
     if (originalMat) originalMat.delete();
     originalMat = cv.imread(tempCanvas);
 
-    // Detect edges on a downscaled version for speed
     let detectedPoints = null;
     try {
       const detectMat = cv.imread(dom.canvasInput);
       const result = Scanner.detectEdges(detectMat);
       if (result && result.points) {
-        // Scale detected points back to original image coords
         detectedPoints = result.points.map(p => ({
           x: p.x * (imgW / displayW),
           y: p.y * (imgH / displayH)
@@ -267,7 +280,6 @@ const App = (() => {
       showToast('Ajusta las esquinas manualmente', 'info');
     }
 
-    // Initialize corner handles
     Corners.init(
       dom.canvasOverlay,
       detectedPoints,
@@ -289,54 +301,317 @@ const App = (() => {
     try {
       const cornerPoints = Corners.getPoints();
 
-      // Warp perspective
       if (warpedMat) warpedMat.delete();
       warpedMat = Scanner.warpPerspective(originalMat, cornerPoints);
 
-      // Apply filter and show result
-      currentFilter = 'bw';
-      dom.filterBtns.forEach(b => b.classList.remove('active'));
-      document.getElementById('filter-bw').classList.add('active');
+      // Apply current filter and capture the result as a page
+      resetFilterUI();
+      const filtered = Scanner.applyFilter(warpedMat, currentFilter);
+      Scanner.drawToCanvas(filtered, dom.canvasOutput);
 
-      applyCurrentFilter();
+      // Save this page
+      const pageData = {
+        dataUrl: dom.canvasOutput.toDataURL('image/png'),
+        width: dom.canvasOutput.width,
+        height: dom.canvasOutput.height,
+        filter: currentFilter
+      };
+
+      // Store the warped data URL for re-filtering later
+      const warpCanvas = document.createElement('canvas');
+      warpCanvas.width = warpedMat.cols;
+      warpCanvas.height = warpedMat.rows;
+      cv.imshow(warpCanvas, warpedMat);
+      pageData.warpedDataUrl = warpCanvas.toDataURL('image/png');
+
+      filtered.delete();
+
+      scannedPages.push(pageData);
+      activePageIndex = scannedPages.length - 1;
 
       Corners.destroy();
+      cleanupMats();
+      originalImage = null;
+
+      renderPagesStrip();
+      updatePageCounter();
       setState('result');
-      showToast('¡Escaneo completado!', 'success');
+
+      const pageNum = scannedPages.length;
+      showToast(`¡Página ${pageNum} escaneada!`, 'success');
     } catch (err) {
       console.error('[App] Scan error:', err);
       showToast('Error al escanear. Intenta ajustar las esquinas.', 'error');
     }
   }
 
-  function applyCurrentFilter() {
-    if (!warpedMat) return;
+  // ======== Re-apply filter to active page ========
 
-    try {
-      const filtered = Scanner.applyFilter(warpedMat, currentFilter);
-      Scanner.drawToCanvas(filtered, dom.canvasOutput);
-      filtered.delete();
-    } catch (err) {
-      console.error('[App] Filter error:', err);
-      showToast('Error al aplicar filtro', 'error');
+  function reapplyFilterToActivePage() {
+    if (activePageIndex < 0 || activePageIndex >= scannedPages.length) return;
+
+    const page = scannedPages[activePageIndex];
+
+    // Re-load the warped (unfiltered) image
+    const img = new Image();
+    img.onload = () => {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.naturalWidth;
+      tempCanvas.height = img.naturalHeight;
+      const ctx = tempCanvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      const mat = cv.imread(tempCanvas);
+      try {
+        const filtered = Scanner.applyFilter(mat, currentFilter);
+        Scanner.drawToCanvas(filtered, dom.canvasOutput);
+
+        // Update stored page
+        page.dataUrl = dom.canvasOutput.toDataURL('image/png');
+        page.width = dom.canvasOutput.width;
+        page.height = dom.canvasOutput.height;
+        page.filter = currentFilter;
+
+        filtered.delete();
+        renderPagesStrip();
+      } catch (err) {
+        console.error('[App] Re-filter error:', err);
+        showToast('Error al aplicar filtro', 'error');
+      }
+      mat.delete();
+    };
+    img.src = page.warpedDataUrl;
+  }
+
+  // ======== Multi-page ========
+
+  function addAnotherPage() {
+    // Open file input to add another page
+    dom.fileInput.click();
+  }
+
+  function deleteActivePage() {
+    if (activePageIndex < 0 || scannedPages.length === 0) return;
+
+    scannedPages.splice(activePageIndex, 1);
+
+    if (scannedPages.length === 0) {
+      goToUpload();
+      showToast('Todas las páginas eliminadas', 'info');
+      return;
     }
+
+    // Adjust active index
+    if (activePageIndex >= scannedPages.length) {
+      activePageIndex = scannedPages.length - 1;
+    }
+
+    showActivePage();
+    renderPagesStrip();
+    updatePageCounter();
+    showToast('Página eliminada', 'info');
+  }
+
+  function showActivePage() {
+    if (activePageIndex < 0 || activePageIndex >= scannedPages.length) return;
+
+    const page = scannedPages[activePageIndex];
+
+    // Draw the stored dataUrl onto canvasOutput
+    const img = new Image();
+    img.onload = () => {
+      dom.canvasOutput.width = img.naturalWidth;
+      dom.canvasOutput.height = img.naturalHeight;
+      const ctx = dom.canvasOutput.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      // Update filter UI to match this page's filter
+      currentFilter = page.filter;
+      dom.filterBtns.forEach(b => b.classList.remove('active'));
+      const activeBtn = document.querySelector(`[data-filter="${page.filter}"]`);
+      if (activeBtn) activeBtn.classList.add('active');
+    };
+    img.src = page.dataUrl;
+
+    updatePageCounter();
+    highlightActiveThumb();
+  }
+
+  function selectPage(index) {
+    if (index < 0 || index >= scannedPages.length) return;
+    activePageIndex = index;
+    showActivePage();
+  }
+
+  // ======== Pages Strip UI ========
+
+  function renderPagesStrip() {
+    if (!dom.pagesStripList) return;
+
+    dom.pagesStripList.innerHTML = '';
+
+    if (scannedPages.length === 0) {
+      dom.pagesStrip.classList.add('hidden');
+      return;
+    }
+
+    dom.pagesStrip.classList.remove('hidden');
+
+    scannedPages.forEach((page, i) => {
+      const thumb = document.createElement('button');
+      thumb.className = 'page-thumb' + (i === activePageIndex ? ' active' : '');
+      thumb.title = `Página ${i + 1}`;
+      thumb.setAttribute('aria-label', `Ver página ${i + 1}`);
+
+      const img = document.createElement('img');
+      img.src = page.dataUrl;
+      img.alt = `Página ${i + 1}`;
+      img.draggable = false;
+
+      const label = document.createElement('span');
+      label.className = 'page-thumb__label';
+      label.textContent = i + 1;
+
+      thumb.appendChild(img);
+      thumb.appendChild(label);
+
+      thumb.addEventListener('click', () => selectPage(i));
+
+      dom.pagesStripList.appendChild(thumb);
+    });
+
+    // Scroll to active thumb
+    const activeThumb = dom.pagesStripList.querySelector('.page-thumb.active');
+    if (activeThumb) {
+      activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }
+
+  function highlightActiveThumb() {
+    if (!dom.pagesStripList) return;
+    const thumbs = dom.pagesStripList.querySelectorAll('.page-thumb');
+    thumbs.forEach((t, i) => {
+      t.classList.toggle('active', i === activePageIndex);
+    });
+    const activeThumb = dom.pagesStripList.querySelector('.page-thumb.active');
+    if (activeThumb) {
+      activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }
+
+  function updatePageCounter() {
+    if (dom.pageCounter) {
+      if (scannedPages.length > 0) {
+        dom.pageCounter.textContent = `${activePageIndex + 1} / ${scannedPages.length}`;
+        dom.pageCounter.classList.remove('hidden');
+      } else {
+        dom.pageCounter.classList.add('hidden');
+      }
+    }
+  }
+
+  function resetFilterUI() {
+    currentFilter = 'color';
+    dom.filterBtns.forEach(b => b.classList.remove('active'));
+    document.getElementById('filter-color').classList.add('active');
   }
 
   // ======== Download ========
 
-  function downloadResult() {
+  function downloadAllImages() {
+    if (scannedPages.length === 0) {
+      showToast('No hay páginas para descargar', 'warning');
+      return;
+    }
+
     try {
-      const dataUrl = Scanner.exportImage(dom.canvasOutput, 'png');
-      const link = document.createElement('a');
-      link.download = `pablito-leans-scan-${Date.now()}.png`;
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast('Imagen descargada', 'success');
+      if (scannedPages.length === 1) {
+        // Single page: download directly
+        const link = document.createElement('a');
+        link.download = `pablito-leans-scan-${Date.now()}.png`;
+        link.href = scannedPages[0].dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('Imagen descargada', 'success');
+      } else {
+        // Multiple pages: download each one
+        scannedPages.forEach((page, i) => {
+          setTimeout(() => {
+            const link = document.createElement('a');
+            link.download = `pablito-leans-pag${i + 1}-${Date.now()}.png`;
+            link.href = page.dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }, i * 300); // Stagger downloads
+        });
+        showToast(`Descargando ${scannedPages.length} imágenes…`, 'success');
+      }
     } catch (err) {
       console.error('[App] Download error:', err);
       showToast('Error al descargar', 'error');
+    }
+  }
+
+  function downloadPdf() {
+    if (scannedPages.length === 0) {
+      showToast('No hay páginas para exportar', 'warning');
+      return;
+    }
+
+    if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+      showToast('Cargando librería PDF…', 'info');
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+      script.onload = () => {
+        generatePdf();
+      };
+      script.onerror = () => {
+        showToast('Error al cargar la librería PDF', 'error');
+      };
+      document.head.appendChild(script);
+      return;
+    }
+
+    generatePdf();
+  }
+
+  function generatePdf() {
+    try {
+      const { jsPDF } = window.jspdf;
+
+      // Use first page dimensions to determine orientation
+      const firstPage = scannedPages[0];
+      const isLandscape = firstPage.width > firstPage.height;
+
+      const pdf = new jsPDF({
+        orientation: isLandscape ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [firstPage.width, firstPage.height],
+        hotfixes: ['px_scaling']
+      });
+
+      scannedPages.forEach((page, i) => {
+        if (i > 0) {
+          const pageLandscape = page.width > page.height;
+          pdf.addPage([page.width, page.height], pageLandscape ? 'landscape' : 'portrait');
+        }
+
+        pdf.addImage(
+          page.dataUrl,
+          'PNG',
+          0, 0,
+          page.width,
+          page.height
+        );
+      });
+
+      pdf.save(`pablito-leans-${scannedPages.length}pag-${Date.now()}.pdf`);
+      showToast(`PDF con ${scannedPages.length} página(s) descargado`, 'success');
+    } catch (err) {
+      console.error('[App] PDF generation error:', err);
+      showToast('Error al generar PDF', 'error');
     }
   }
 
@@ -372,7 +647,6 @@ const App = (() => {
 
     dom.toastContainer.appendChild(toast);
 
-    // Auto-remove after 3 seconds
     setTimeout(() => {
       toast.classList.add('toast-out');
       toast.addEventListener('animationend', () => toast.remove());
@@ -387,10 +661,9 @@ const App = (() => {
   };
 })();
 
-// Boot the application
+// Boot
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });
 
-// Expose to global scope for OpenCV callback
 window.App = App;

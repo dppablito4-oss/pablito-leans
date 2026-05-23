@@ -162,60 +162,218 @@ const Scanner = (() => {
 
   /**
    * Apply a filter/threshold to the warped image.
+   * Filters inspired by Microsoft Lens.
    *
-   * @param {cv.Mat} src - Source image (the warped result)
-   * @param {'bw' | 'gray' | 'color'} mode - Filter mode
-   * @returns {cv.Mat} Filtered image
+   * @param {cv.Mat} src - Source image (the warped result, RGBA)
+   * @param {string} mode - Filter mode
+   * @returns {cv.Mat} Filtered image (RGBA)
    */
   function applyFilter(src, mode) {
-    const dst = new cv.Mat();
-
     switch (mode) {
-      case 'bw': {
-        const gray = new cv.Mat();
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-        cv.adaptiveThreshold(
-          gray, dst, 255,
-          cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-          cv.THRESH_BINARY,
-          21, 10
-        );
-        // Convert back to RGBA for canvas display
-        const rgba = new cv.Mat();
-        cv.cvtColor(dst, rgba, cv.COLOR_GRAY2RGBA);
-        gray.delete();
-        dst.delete();
-        return rgba;
-      }
-
-      case 'gray': {
-        const gray = new cv.Mat();
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-        // Enhance contrast with CLAHE-like approach via normalize
-        cv.normalize(gray, gray, 0, 255, cv.NORM_MINMAX);
-        cv.cvtColor(gray, dst, cv.COLOR_GRAY2RGBA);
-        gray.delete();
-        return dst;
-      }
-
+      case 'document':
+        return filterDocument(src);
+      case 'whiteboard':
+        return filterWhiteboard(src);
+      case 'gray':
+        return filterGrayscale(src);
+      case 'sepia':
+        return filterSepia(src);
+      case 'sketch':
+        return filterSketch(src);
+      case 'highcontrast':
+        return filterHighContrast(src);
       case 'color':
-      default: {
-        // Enhance color: slight sharpening + brightness
-        src.copyTo(dst);
-        // Simple contrast enhancement
-        const lab = new cv.Mat();
-        cv.cvtColor(dst, lab, cv.COLOR_RGBA2RGB);
-        const rgbEnhanced = new cv.Mat();
-        // Normalize each channel
-        cv.normalize(lab, rgbEnhanced, 0, 255, cv.NORM_MINMAX);
-        const result = new cv.Mat();
-        cv.cvtColor(rgbEnhanced, result, cv.COLOR_RGB2RGBA);
-        lab.delete();
-        rgbEnhanced.delete();
-        dst.delete();
-        return result;
-      }
+      default:
+        return filterColor(src);
     }
+  }
+
+  // ---- Filter: Color (Enhanced) ----
+  // Enhances contrast and saturation for vivid, clean colors.
+  function filterColor(src) {
+    const rgb = new cv.Mat();
+    cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+
+    // Split channels, normalize each independently, merge back
+    const channels = new cv.MatVector();
+    cv.split(rgb, channels);
+
+    for (let i = 0; i < 3; i++) {
+      const ch = channels.get(i);
+      cv.normalize(ch, ch, 0, 255, cv.NORM_MINMAX);
+    }
+
+    const merged = new cv.Mat();
+    cv.merge(channels, merged);
+
+    // Light sharpen via unsharp mask
+    const blurred = new cv.Mat();
+    cv.GaussianBlur(merged, blurred, new cv.Size(0, 0), 2);
+    const sharpened = new cv.Mat();
+    cv.addWeighted(merged, 1.4, blurred, -0.4, 0, sharpened);
+
+    const result = new cv.Mat();
+    cv.cvtColor(sharpened, result, cv.COLOR_RGB2RGBA);
+
+    rgb.delete(); channels.delete(); merged.delete(); blurred.delete(); sharpened.delete();
+    return result;
+  }
+
+  // ---- Filter: Document (B&W Adaptive Threshold) ----
+  // Classic scan look: white background, black text.
+  function filterDocument(src) {
+    const gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+    // Slight blur to reduce noise before threshold
+    const blurred = new cv.Mat();
+    cv.GaussianBlur(gray, blurred, new cv.Size(3, 3), 0);
+
+    const thresh = new cv.Mat();
+    cv.adaptiveThreshold(
+      blurred, thresh, 255,
+      cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+      cv.THRESH_BINARY,
+      21, 10
+    );
+
+    const result = new cv.Mat();
+    cv.cvtColor(thresh, result, cv.COLOR_GRAY2RGBA);
+
+    gray.delete(); blurred.delete(); thresh.delete();
+    return result;
+  }
+
+  // ---- Filter: Whiteboard ----
+  // Optimized for whiteboards/pizarras: brightens the background, sharpens markers.
+  function filterWhiteboard(src) {
+    const rgb = new cv.Mat();
+    cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+
+    // Large Gaussian blur to estimate the background illumination
+    const bg = new cv.Mat();
+    cv.GaussianBlur(rgb, bg, new cv.Size(51, 51), 0);
+
+    // Divide original by background to normalize illumination
+    // result = (src / bg) * 255
+    const divided = new cv.Mat();
+    cv.divide(rgb, bg, divided, 255.0);
+
+    // Clamp values
+    const clamped = new cv.Mat();
+    cv.normalize(divided, clamped, 0, 255, cv.NORM_MINMAX);
+
+    // Increase brightness and contrast
+    const bright = new cv.Mat();
+    clamped.convertTo(bright, -1, 1.3, 20); // alpha=1.3 (contrast), beta=20 (brightness)
+
+    const result = new cv.Mat();
+    cv.cvtColor(bright, result, cv.COLOR_RGB2RGBA);
+
+    rgb.delete(); bg.delete(); divided.delete(); clamped.delete(); bright.delete();
+    return result;
+  }
+
+  // ---- Filter: Grayscale ----
+  // Normalized grayscale with enhanced contrast.
+  function filterGrayscale(src) {
+    const gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    cv.normalize(gray, gray, 0, 255, cv.NORM_MINMAX);
+
+    const result = new cv.Mat();
+    cv.cvtColor(gray, result, cv.COLOR_GRAY2RGBA);
+
+    gray.delete();
+    return result;
+  }
+
+  // ---- Filter: Sepia ----
+  // Warm vintage tone with a brownish tint.
+  function filterSepia(src) {
+    const rgb = new cv.Mat();
+    cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+
+    // Sepia kernel (applied per-pixel via transform)
+    // newR = 0.393*R + 0.769*G + 0.189*B
+    // newG = 0.349*R + 0.686*G + 0.168*B
+    // newB = 0.272*R + 0.534*G + 0.131*B
+    const sepiaKernel = cv.matFromArray(3, 3, cv.CV_32FC1, [
+      0.393, 0.769, 0.189,
+      0.349, 0.686, 0.168,
+      0.272, 0.534, 0.131
+    ]);
+
+    const float = new cv.Mat();
+    rgb.convertTo(float, cv.CV_32FC3);
+
+    const transformed = new cv.Mat();
+    cv.transform(float, transformed, sepiaKernel);
+
+    // Convert back to 8-bit, clamping values
+    const sepia8 = new cv.Mat();
+    transformed.convertTo(sepia8, cv.CV_8UC3);
+
+    const result = new cv.Mat();
+    cv.cvtColor(sepia8, result, cv.COLOR_RGB2RGBA);
+
+    rgb.delete(); sepiaKernel.delete(); float.delete(); transformed.delete(); sepia8.delete();
+    return result;
+  }
+
+  // ---- Filter: Sketch (Pencil drawing) ----
+  // Edge-detected pencil sketch effect.
+  function filterSketch(src) {
+    const gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+    // Invert
+    const inverted = new cv.Mat();
+    cv.bitwise_not(gray, inverted);
+
+    // Heavy Gaussian blur on the inverted image
+    const blurred = new cv.Mat();
+    cv.GaussianBlur(inverted, blurred, new cv.Size(21, 21), 0);
+
+    // Dodge blend: result = gray / (255 - blurred) * 255
+    // We simulate this with divide
+    const invertedBlur = new cv.Mat();
+    cv.bitwise_not(blurred, invertedBlur);
+
+    // Avoid division by zero: add 1 to denominator
+    const ones = new cv.Mat(invertedBlur.rows, invertedBlur.cols, cv.CV_8UC1, new cv.Scalar(1));
+    const safeDenom = new cv.Mat();
+    cv.add(invertedBlur, ones, safeDenom);
+
+    const sketch = new cv.Mat();
+    cv.divide(gray, safeDenom, sketch, 256.0);
+
+    const result = new cv.Mat();
+    cv.cvtColor(sketch, result, cv.COLOR_GRAY2RGBA);
+
+    gray.delete(); inverted.delete(); blurred.delete();
+    invertedBlur.delete(); ones.delete(); safeDenom.delete(); sketch.delete();
+    return result;
+  }
+
+  // ---- Filter: High Contrast ----
+  // Stark black & white with strong Otsu threshold.
+  function filterHighContrast(src) {
+    const gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+    // Enhance contrast first
+    cv.normalize(gray, gray, 0, 255, cv.NORM_MINMAX);
+
+    // Apply Otsu threshold for automatic optimal split
+    const thresh = new cv.Mat();
+    cv.threshold(gray, thresh, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU);
+
+    const result = new cv.Mat();
+    cv.cvtColor(thresh, result, cv.COLOR_GRAY2RGBA);
+
+    gray.delete(); thresh.delete();
+    return result;
   }
 
   /**
