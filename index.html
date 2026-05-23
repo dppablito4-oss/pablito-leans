@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pablito Leans — Escáner de Documentos</title>
+  <meta name="description" content="Escanea documentos desde tu celular o PC. Detecta bordes automáticamente, ajusta esquinas y descarga imágenes limpias y planas. Sin servidores, 100% privado.">
+  <meta name="theme-color" content="#07070d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Pablito Leans — Escáner de Documentos">
+  <meta property="og:description" content="Escanea documentos al instante desde tu navegador. Detección de bordes, ajuste manual y exportación limpia.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://leans.sypablitodp.site">
+
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ HEADER ============ -->
+  <header class="app-header" id="app-header">
+    <img src="assets/favicon.svg" alt="Pablito Leans logo" class="app-logo">
+    <h1 class="app-title">Pablito Leans</h1>
+    <span class="app-subtitle">Escáner de Documentos</span>
+  </header>
+
+  <!-- ============ MAIN ============ -->
+  <main class="app-main" id="app-main">
+
+    <!-- STATE 1: Upload -->
+    <section class="upload-zone" id="upload-zone" aria-label="Subir documento">
+      <svg class="upload-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <div class="upload-zone__text">
+        <h2>Sube tu documento</h2>
+        <p>Arrastra una imagen aquí o usa el botón</p>
+      </div>
+      <button class="upload-zone__btn" id="btn-select-file" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        Seleccionar imagen
+      </button>
+      <input type="file" accept="image/*" capture="environment" class="upload-zone__input" id="file-input">
+    </section>
+
+    <!-- STATE 2: Editor -->
+    <section class="editor-zone hidden" id="editor-zone" aria-label="Editor de esquinas">
+      <div class="canvas-wrapper" id="canvas-wrapper">
+        <canvas id="canvasInput"></canvas>
+        <canvas id="canvasOverlay" class="canvas-overlay"></canvas>
+      </div>
+      <div class="editor-hint">
+        <svg class="editor-hint__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="16" x2="12" y2="12"/>
+          <line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+        <span>Arrastra los puntos para ajustar las esquinas del documento</span>
+      </div>
+    </section>
+
+    <!-- STATE 3: Result -->
+    <section class="result-zone hidden" id="result-zone" aria-label="Resultado del escaneo">
+      <div class="result-badge">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Escaneo completado
+      </div>
+
+      <!-- Filter selector -->
+      <div class="filter-selector" id="filter-selector">
+        <button class="filter-option active" data-filter="bw" id="filter-bw">B&amp;N</button>
+        <button class="filter-option" data-filter="gray" id="filter-gray">Grises</button>
+        <button class="filter-option" data-filter="color" id="filter-color">Color</button>
+      </div>
+
+      <div class="result-canvas-wrapper">
+        <canvas id="canvasOutput"></canvas>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ CONTROLS BAR ============ -->
+  <footer class="controls-bar hidden" id="controls-bar">
+    <!-- Editor controls -->
+    <div id="editor-controls" class="hidden">
+      <button class="btn btn-secondary" id="btn-cancel" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+        Cancelar
+      </button>
+      <button class="btn btn-primary" id="btn-scan" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        Escanear
+      </button>
+    </div>
+
+    <!-- Result controls -->
+    <div id="result-controls" class="hidden">
+      <button class="btn btn-secondary" id="btn-readjust" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+        Re-ajustar
+      </button>
+      <button class="btn btn-primary" id="btn-download" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Descargar
+      </button>
+      <button class="btn btn-secondary" id="btn-new-scan" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Nuevo
+      </button>
+    </div>
+  </footer>
+
+  <!-- ============ LOADER OVERLAY ============ -->
+  <div class="loader-overlay" id="opencv-loader">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">
+      <strong>Cargando motor de visión</strong>
+      Preparando OpenCV.js…
+    </div>
+    <div class="loader-progress">
+      <div class="loader-progress__bar"></div>
+    </div>
+  </div>
+
+  <!-- ============ TOAST CONTAINER ============ -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- ============ SCRIPTS ============ -->
+  <script>
+    // Global callback for OpenCV.js readiness
+    function onOpenCvReady() {
+      console.log('[Pablito Leans] OpenCV.js loaded successfully');
+      if (window.App && window.App.onOpenCvReady) {
+        window.App.onOpenCvReady();
+      } else {
+        window._opencvReady = true;
+      }
+    }
+  </script>
+  <script async src="https://docs.opencv.org/4.10.0/opencv.js" onload="onOpenCvReady()"></script>
+  <script src="js/scanner.js"></script>
+  <script src="js/corners.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
