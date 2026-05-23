@@ -1,28 +1,49 @@
 /**
  * app.js — Main Application Orchestrator
- * Manages UI states, multi-page scanning, bulk upload, re-adjusting, and D&D reordering.
+ * Manages UI states, multi-page scanning, bulk upload, re-adjusting, D&D reordering,
+ * and document tabs (max 3 simultaneous documents).
  */
 
 const App = (() => {
   'use strict';
 
+  // ======== Constants ========
+  const MAX_TABS = 3;
+  let tabIdCounter = 0;
+
   // ======== State ========
-  let currentState = 'upload'; // 'upload' | 'editor' | 'result'
-  let originalImage = null;    // HTMLImageElement
-  let originalMat = null;      // cv.Mat of the original image
-  let warpedMat = null;        // cv.Mat of the warped result (current page being edited)
-  let currentFilter = 'color';
   let opencvReady = false;
 
-  // Multi-page state
-  // Each page: { originalDataUrl, corners, warpedDataUrl, dataUrl, width, height, filter }
-  let scannedPages = [];
-  let activePageIndex = -1;
-  let isReAdjusting = false; // Flag to know if we are overriding an existing page
+  // Tab-based state: each tab is an independent document workspace
+  let tabs = [];
+  let activeTabIndex = 0;
+
+  // Transient state (not saved per tab, only used during active editing)
+  let originalImage = null;
+  let originalMat = null;
+  let warpedMat = null;
 
   // Bulk processing state
   let bulkQueue = [];
   let isProcessingBulk = false;
+
+  function createTabData(name) {
+    return {
+      id: ++tabIdCounter,
+      name: name || `Documento ${tabIdCounter}`,
+      state: 'upload',
+      scannedPages: [],
+      activePageIndex: -1,
+      currentFilter: 'color',
+      originalImageDataUrl: null,
+      isReAdjusting: false,
+      corners: null
+    };
+  }
+
+  function currentTab() {
+    return tabs[activeTabIndex];
+  }
 
   // ======== DOM Elements ========
   const dom = {};
@@ -40,7 +61,6 @@ const App = (() => {
     dom.btnReadjust = document.getElementById('btn-readjust');
     dom.btnDownload = document.getElementById('btn-download');
     dom.btnDownloadPdf = document.getElementById('btn-download-pdf');
-    dom.btnNewScan = document.getElementById('btn-new-scan');
     dom.btnAddPage = document.getElementById('btn-add-page');
     dom.btnDeletePage = document.getElementById('btn-delete-page');
     dom.canvasInput = document.getElementById('canvasInput');
@@ -54,6 +74,10 @@ const App = (() => {
     dom.pagesStrip = document.getElementById('pages-strip');
     dom.pagesStripList = document.getElementById('pages-strip-list');
     dom.pageCounter = document.getElementById('page-counter');
+    // Tabs
+    dom.tabsBar = document.getElementById('tabs-bar');
+    dom.tabsList = document.getElementById('tabs-list');
+    dom.btnAddTab = document.getElementById('btn-add-tab');
   }
 
   // ======== Initialization ========
@@ -61,6 +85,11 @@ const App = (() => {
   function init() {
     cacheDom();
     bindEvents();
+
+    // Create the first tab
+    tabs.push(createTabData());
+    activeTabIndex = 0;
+    renderTabsBar();
 
     if (window._opencvReady || (typeof cv !== 'undefined' && cv.Mat)) {
       onOpenCvReady();
@@ -110,21 +139,210 @@ const App = (() => {
     dom.btnReadjust.addEventListener('click', startReAdjust);
     dom.btnDownload.addEventListener('click', downloadAllImages);
     dom.btnDownloadPdf.addEventListener('click', downloadPdf);
-    dom.btnNewScan.addEventListener('click', goToUpload);
     dom.btnAddPage.addEventListener('click', addAnotherPage);
     dom.btnDeletePage.addEventListener('click', deleteActivePage);
+
+    // Tab controls
+    dom.btnAddTab.addEventListener('click', addNewTab);
 
     // Filter buttons
     dom.filterBtns.forEach(btn => {
       btn.addEventListener('click', () => {
+        const tab = currentTab();
         const filter = btn.dataset.filter;
-        if (filter === currentFilter) return;
-        currentFilter = filter;
+        if (filter === tab.currentFilter) return;
+        tab.currentFilter = filter;
         dom.filterBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         reapplyFilterToActivePage();
       });
     });
+  }
+
+  // ======== Tab Management ========
+
+  function addNewTab() {
+    if (tabs.length >= MAX_TABS) {
+      showToast(`Máximo ${MAX_TABS} documentos simultáneos`, 'warning');
+      return;
+    }
+
+    // Save current transient state before switching
+    saveTransientState();
+
+    const newTab = createTabData();
+    tabs.push(newTab);
+    activeTabIndex = tabs.length - 1;
+
+    // Clean up transient state for the new tab
+    cleanupMats();
+    originalImage = null;
+    Corners.destroy();
+
+    renderTabsBar();
+    restoreTabView();
+    showToast(`${newTab.name} creado`, 'success');
+  }
+
+  function switchTab(index) {
+    if (index === activeTabIndex) return;
+    if (index < 0 || index >= tabs.length) return;
+
+    // Save current state
+    saveTransientState();
+    cleanupMats();
+    originalImage = null;
+    Corners.destroy();
+
+    activeTabIndex = index;
+    renderTabsBar();
+    restoreTabView();
+  }
+
+  function closeTab(index) {
+    if (index < 0 || index >= tabs.length) return;
+
+    const tab = tabs[index];
+
+    // If the tab has scanned pages, ask for confirmation
+    if (tab.scannedPages.length > 0) {
+      showCloseConfirmation(index);
+      return;
+    }
+
+    // Otherwise close directly
+    doCloseTab(index);
+  }
+
+  function doCloseTab(index) {
+    const closingName = tabs[index].name;
+    tabs.splice(index, 1);
+
+    // Always keep at least 1 tab
+    if (tabs.length === 0) {
+      tabs.push(createTabData());
+      activeTabIndex = 0;
+    } else if (activeTabIndex >= tabs.length) {
+      activeTabIndex = tabs.length - 1;
+    } else if (index < activeTabIndex) {
+      activeTabIndex--;
+    } else if (index === activeTabIndex) {
+      // We closed the active tab, switch to clamped index
+      activeTabIndex = Math.min(activeTabIndex, tabs.length - 1);
+    }
+
+    cleanupMats();
+    originalImage = null;
+    Corners.destroy();
+
+    renderTabsBar();
+    restoreTabView();
+    showToast(`${closingName} cerrado`, 'info');
+  }
+
+  function showCloseConfirmation(tabIndex) {
+    const tab = tabs[tabIndex];
+    const overlay = document.createElement('div');
+    overlay.className = 'tab-confirm-overlay';
+    overlay.innerHTML = `
+      <div class="tab-confirm-dialog">
+        <h3>¿Cerrar "${tab.name}"?</h3>
+        <p>Se perderán ${tab.scannedPages.length} página(s) escaneada(s).</p>
+        <div class="tab-confirm-actions">
+          <button class="btn btn-secondary" id="tab-confirm-cancel">Cancelar</button>
+          <button class="btn btn-danger" id="tab-confirm-close">Cerrar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#tab-confirm-cancel').addEventListener('click', () => {
+      overlay.remove();
+    });
+    overlay.querySelector('#tab-confirm-close').addEventListener('click', () => {
+      overlay.remove();
+      doCloseTab(tabIndex);
+    });
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+  }
+
+  function saveTransientState() {
+    // Save the current tab's visual state. No cv.Mat objects are saved.
+    const tab = currentTab();
+    if (!tab) return;
+    // State (upload/editor/result) is already tracked in tab.state via setState
+    // scannedPages, activePageIndex, currentFilter are already on the tab
+    // originalImageDataUrl is saved when entering editor
+  }
+
+  function restoreTabView() {
+    const tab = currentTab();
+    if (!tab) return;
+
+    // Restore UI state for this tab
+    setState(tab.state);
+
+    if (tab.state === 'result' && tab.scannedPages.length > 0) {
+      if (tab.activePageIndex < 0) tab.activePageIndex = 0;
+      showActivePage();
+      renderPagesStrip();
+    } else if (tab.state === 'editor' && tab.originalImageDataUrl) {
+      // Reload the image into the editor
+      const img = new Image();
+      img.onload = () => {
+        originalImage = img;
+        setupEditor(tab.corners);
+      };
+      img.src = tab.originalImageDataUrl;
+    } else {
+      // Upload state — reset visual
+      resetFilterUI();
+      renderPagesStrip();
+    }
+  }
+
+  function renderTabsBar() {
+    dom.tabsList.innerHTML = '';
+
+    tabs.forEach((tab, i) => {
+      const tabEl = document.createElement('div');
+      tabEl.className = 'tab' + (i === activeTabIndex ? ' active' : '');
+      tabEl.dataset.index = i;
+
+      const hasPages = tab.scannedPages.length > 0;
+
+      tabEl.innerHTML = `
+        <span class="tab__status ${hasPages ? 'tab__status--has-pages' : 'tab__status--empty'}"></span>
+        <span class="tab__name">${tab.name}</span>
+        <span class="tab__close" title="Cerrar">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </span>
+      `;
+
+      // Click on tab to switch
+      tabEl.addEventListener('click', (e) => {
+        if (e.target.closest('.tab__close')) return;
+        switchTab(i);
+      });
+
+      // Click on close button
+      const closeBtn = tabEl.querySelector('.tab__close');
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeTab(i);
+      });
+
+      dom.tabsList.appendChild(tabEl);
+    });
+
+    // Show/hide add button based on max tabs
+    dom.btnAddTab.style.display = tabs.length >= MAX_TABS ? 'none' : 'flex';
   }
 
   // ======== File Handling (Bulk & Single) ========
@@ -150,11 +368,9 @@ const App = (() => {
     }
 
     if (validFiles.length === 1) {
-      // Single file -> go to editor
-      isReAdjusting = false;
+      currentTab().isReAdjusting = false;
       loadSingleImageToEditor(validFiles[0]);
     } else {
-      // Multiple files -> bulk auto-scan
       bulkQueue = validFiles;
       isProcessingBulk = true;
       processBulkQueue();
@@ -167,7 +383,7 @@ const App = (() => {
       const img = new Image();
       img.onload = () => {
         originalImage = img;
-        // The original image DataUrl will be grabbed from img.src when saving the page
+        currentTab().originalImageDataUrl = img.src;
         goToEditor();
       };
       img.onerror = () => showToast('Error al cargar la imagen', 'error');
@@ -180,12 +396,14 @@ const App = (() => {
   // ======== Bulk Processing ========
 
   async function processBulkQueue() {
+    const tab = currentTab();
     if (bulkQueue.length === 0) {
       isProcessingBulk = false;
       showToast('Carga múltiple completada', 'success');
-      activePageIndex = scannedPages.length - 1;
+      tab.activePageIndex = tab.scannedPages.length - 1;
       renderPagesStrip();
       updatePageCounter();
+      renderTabsBar();
       setState('result');
       return;
     }
@@ -199,7 +417,6 @@ const App = (() => {
       const img = new Image();
       img.onload = () => {
         autoScanImage(img);
-        // Process next using setTimeout to not block UI completely
         setTimeout(processBulkQueue, 100);
       };
       img.src = e.target.result;
@@ -208,6 +425,7 @@ const App = (() => {
   }
 
   function autoScanImage(img) {
+    const tab = currentTab();
     const imgW = img.naturalWidth;
     const imgH = img.naturalHeight;
 
@@ -222,7 +440,6 @@ const App = (() => {
 
     let detectedPoints = null;
     try {
-      // Downscale for faster detection
       const scale = Math.min(600 / imgW, 1);
       const displayW = Math.round(imgW * scale);
       const displayH = Math.round(imgH * scale);
@@ -245,7 +462,6 @@ const App = (() => {
       detectMat.delete();
     } catch(e) {}
 
-    // Fallback to full image corners if no detection
     if (!detectedPoints) {
       detectedPoints = [
         {x: 0, y: 0},
@@ -258,7 +474,6 @@ const App = (() => {
     const warped = Scanner.warpPerspective(mat, detectedPoints);
     const filtered = Scanner.applyFilter(warped, 'color');
 
-    // Create a temporary canvas for output
     const outCanvas = document.createElement('canvas');
     Scanner.drawToCanvas(filtered, outCanvas);
 
@@ -267,7 +482,7 @@ const App = (() => {
     warpCanvas.height = warped.rows;
     cv.imshow(warpCanvas, warped);
 
-    scannedPages.push({
+    tab.scannedPages.push({
       originalDataUrl,
       corners: detectedPoints,
       warpedDataUrl: warpCanvas.toDataURL('image/png'),
@@ -285,7 +500,7 @@ const App = (() => {
   // ======== State Management ========
 
   function setState(state) {
-    currentState = state;
+    currentTab().state = state;
 
     dom.uploadZone.classList.add('hidden');
     dom.editorZone.classList.add('hidden');
@@ -310,16 +525,22 @@ const App = (() => {
     cleanupMats();
     Corners.destroy();
     originalImage = null;
-    scannedPages = [];
-    activePageIndex = -1;
+    const tab = currentTab();
+    tab.scannedPages = [];
+    tab.activePageIndex = -1;
+    tab.originalImageDataUrl = null;
+    tab.isReAdjusting = false;
+    tab.corners = null;
     resetFilterUI();
     renderPagesStrip();
+    renderTabsBar();
     setState('upload');
   }
 
   function handleCancel() {
-    isReAdjusting = false;
-    if (scannedPages.length > 0) {
+    const tab = currentTab();
+    tab.isReAdjusting = false;
+    if (tab.scannedPages.length > 0) {
       cleanupMats();
       Corners.destroy();
       originalImage = null;
@@ -371,7 +592,6 @@ const App = (() => {
 
     let detectedPoints = predefinedCorners;
 
-    // Only run detection if we don't have predefined corners
     if (!detectedPoints) {
       try {
         const detectMat = cv.imread(dom.canvasInput);
@@ -391,6 +611,9 @@ const App = (() => {
       }
     }
 
+    // Save corners to tab for potential restore
+    currentTab().corners = detectedPoints;
+
     Corners.init(
       dom.canvasOverlay,
       detectedPoints,
@@ -404,19 +627,21 @@ const App = (() => {
   // ======== Re-adjust ========
 
   function startReAdjust() {
-    if (activePageIndex < 0 || activePageIndex >= scannedPages.length) return;
+    const tab = currentTab();
+    if (tab.activePageIndex < 0 || tab.activePageIndex >= tab.scannedPages.length) return;
     
-    const page = scannedPages[activePageIndex];
+    const page = tab.scannedPages[tab.activePageIndex];
     if (!page.originalDataUrl) {
       showToast('No se puede re-ajustar, falta imagen original', 'error');
       return;
     }
 
-    isReAdjusting = true;
+    tab.isReAdjusting = true;
 
     const img = new Image();
     img.onload = () => {
       originalImage = img;
+      tab.originalImageDataUrl = img.src;
       goToEditor(page.corners);
     };
     img.src = page.originalDataUrl;
@@ -430,13 +655,15 @@ const App = (() => {
       return;
     }
 
+    const tab = currentTab();
+
     try {
       const cornerPoints = Corners.getPoints();
 
       if (warpedMat) warpedMat.delete();
       warpedMat = Scanner.warpPerspective(originalMat, cornerPoints);
 
-      const targetFilter = isReAdjusting ? scannedPages[activePageIndex].filter : 'color';
+      const targetFilter = tab.isReAdjusting ? tab.scannedPages[tab.activePageIndex].filter : 'color';
       
       const filtered = Scanner.applyFilter(warpedMat, targetFilter);
       Scanner.drawToCanvas(filtered, dom.canvasOutput);
@@ -456,23 +683,26 @@ const App = (() => {
         filter: targetFilter
       };
 
-      if (isReAdjusting) {
-        scannedPages[activePageIndex] = pageData;
+      if (tab.isReAdjusting) {
+        tab.scannedPages[tab.activePageIndex] = pageData;
         showToast('Ajuste guardado', 'success');
       } else {
-        scannedPages.push(pageData);
-        activePageIndex = scannedPages.length - 1;
+        tab.scannedPages.push(pageData);
+        tab.activePageIndex = tab.scannedPages.length - 1;
         showToast(`¡Página escaneada!`, 'success');
       }
 
-      isReAdjusting = false;
+      tab.isReAdjusting = false;
+      tab.corners = null;
+      tab.originalImageDataUrl = null;
       filtered.delete();
       Corners.destroy();
       cleanupMats();
       originalImage = null;
 
       renderPagesStrip();
-      showActivePage(); // Also updates counter and filter UI
+      renderTabsBar();
+      showActivePage();
       setState('result');
 
     } catch (err) {
@@ -484,9 +714,10 @@ const App = (() => {
   // ======== Re-apply filter to active page ========
 
   function reapplyFilterToActivePage() {
-    if (activePageIndex < 0 || activePageIndex >= scannedPages.length) return;
+    const tab = currentTab();
+    if (tab.activePageIndex < 0 || tab.activePageIndex >= tab.scannedPages.length) return;
 
-    const page = scannedPages[activePageIndex];
+    const page = tab.scannedPages[tab.activePageIndex];
 
     const img = new Image();
     img.onload = () => {
@@ -498,13 +729,13 @@ const App = (() => {
 
       const mat = cv.imread(tempCanvas);
       try {
-        const filtered = Scanner.applyFilter(mat, currentFilter);
+        const filtered = Scanner.applyFilter(mat, tab.currentFilter);
         Scanner.drawToCanvas(filtered, dom.canvasOutput);
 
         page.dataUrl = dom.canvasOutput.toDataURL('image/png');
         page.width = dom.canvasOutput.width;
         page.height = dom.canvasOutput.height;
-        page.filter = currentFilter;
+        page.filter = tab.currentFilter;
 
         filtered.delete();
         renderPagesStrip();
@@ -520,34 +751,37 @@ const App = (() => {
   // ======== Multi-page Navigation ========
 
   function addAnotherPage() {
-    isReAdjusting = false;
+    currentTab().isReAdjusting = false;
     dom.fileInput.click();
   }
 
   function deleteActivePage() {
-    if (activePageIndex < 0 || scannedPages.length === 0) return;
+    const tab = currentTab();
+    if (tab.activePageIndex < 0 || tab.scannedPages.length === 0) return;
 
-    scannedPages.splice(activePageIndex, 1);
+    tab.scannedPages.splice(tab.activePageIndex, 1);
 
-    if (scannedPages.length === 0) {
+    if (tab.scannedPages.length === 0) {
       goToUpload();
       showToast('Todas las páginas eliminadas', 'info');
       return;
     }
 
-    if (activePageIndex >= scannedPages.length) {
-      activePageIndex = scannedPages.length - 1;
+    if (tab.activePageIndex >= tab.scannedPages.length) {
+      tab.activePageIndex = tab.scannedPages.length - 1;
     }
 
     showActivePage();
     renderPagesStrip();
+    renderTabsBar();
     showToast('Página eliminada', 'info');
   }
 
   function showActivePage() {
-    if (activePageIndex < 0 || activePageIndex >= scannedPages.length) return;
+    const tab = currentTab();
+    if (tab.activePageIndex < 0 || tab.activePageIndex >= tab.scannedPages.length) return;
 
-    const page = scannedPages[activePageIndex];
+    const page = tab.scannedPages[tab.activePageIndex];
 
     const img = new Image();
     img.onload = () => {
@@ -556,7 +790,7 @@ const App = (() => {
       const ctx = dom.canvasOutput.getContext('2d');
       ctx.drawImage(img, 0, 0);
 
-      currentFilter = page.filter;
+      tab.currentFilter = page.filter;
       dom.filterBtns.forEach(b => b.classList.remove('active'));
       const activeBtn = document.querySelector(`[data-filter="${page.filter}"]`);
       if (activeBtn) activeBtn.classList.add('active');
@@ -568,8 +802,9 @@ const App = (() => {
   }
 
   function selectPage(index) {
-    if (index < 0 || index >= scannedPages.length) return;
-    activePageIndex = index;
+    const tab = currentTab();
+    if (index < 0 || index >= tab.scannedPages.length) return;
+    tab.activePageIndex = index;
     showActivePage();
   }
 
@@ -580,18 +815,19 @@ const App = (() => {
   function renderPagesStrip() {
     if (!dom.pagesStripList) return;
 
+    const tab = currentTab();
     dom.pagesStripList.innerHTML = '';
 
-    if (scannedPages.length === 0) {
+    if (tab.scannedPages.length === 0) {
       dom.pagesStrip.classList.add('hidden');
       return;
     }
 
     dom.pagesStrip.classList.remove('hidden');
 
-    scannedPages.forEach((page, i) => {
+    tab.scannedPages.forEach((page, i) => {
       const thumb = document.createElement('div');
-      thumb.className = 'page-thumb' + (i === activePageIndex ? ' active' : '');
+      thumb.className = 'page-thumb' + (i === tab.activePageIndex ? ' active' : '');
       thumb.title = `Página ${i + 1}`;
       thumb.setAttribute('draggable', 'true');
       thumb.dataset.index = i;
@@ -608,10 +844,8 @@ const App = (() => {
       thumb.appendChild(img);
       thumb.appendChild(label);
 
-      // Select page on click
       thumb.addEventListener('click', () => selectPage(i));
 
-      // Drag and Drop events
       thumb.addEventListener('dragstart', handleDragStart);
       thumb.addEventListener('dragover', handleDragOver);
       thumb.addEventListener('dragleave', handleDragLeave);
@@ -628,7 +862,7 @@ const App = (() => {
     draggedItemIndex = parseInt(this.dataset.index);
     this.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', draggedItemIndex); // Firefox requires data to be set
+    e.dataTransfer.setData('text/plain', draggedItemIndex);
   }
 
   function handleDragOver(e) {
@@ -648,19 +882,18 @@ const App = (() => {
     e.stopPropagation();
     this.classList.remove('drag-over');
     
+    const tab = currentTab();
     const targetIndex = parseInt(this.dataset.index);
     if (draggedItemIndex !== null && draggedItemIndex !== targetIndex) {
-      // Reorder array
-      const itemToMove = scannedPages.splice(draggedItemIndex, 1)[0];
-      scannedPages.splice(targetIndex, 0, itemToMove);
+      const itemToMove = tab.scannedPages.splice(draggedItemIndex, 1)[0];
+      tab.scannedPages.splice(targetIndex, 0, itemToMove);
       
-      // Update activePageIndex if needed
-      if (activePageIndex === draggedItemIndex) {
-        activePageIndex = targetIndex;
-      } else if (activePageIndex > draggedItemIndex && activePageIndex <= targetIndex) {
-        activePageIndex--;
-      } else if (activePageIndex < draggedItemIndex && activePageIndex >= targetIndex) {
-        activePageIndex++;
+      if (tab.activePageIndex === draggedItemIndex) {
+        tab.activePageIndex = targetIndex;
+      } else if (tab.activePageIndex > draggedItemIndex && tab.activePageIndex <= targetIndex) {
+        tab.activePageIndex--;
+      } else if (tab.activePageIndex < draggedItemIndex && tab.activePageIndex >= targetIndex) {
+        tab.activePageIndex++;
       }
 
       renderPagesStrip();
@@ -678,9 +911,10 @@ const App = (() => {
 
   function highlightActiveThumb() {
     if (!dom.pagesStripList) return;
+    const tab = currentTab();
     const thumbs = dom.pagesStripList.querySelectorAll('.page-thumb');
     thumbs.forEach((t, i) => {
-      t.classList.toggle('active', i === activePageIndex);
+      t.classList.toggle('active', i === tab.activePageIndex);
     });
     const activeThumb = dom.pagesStripList.querySelector('.page-thumb.active');
     if (activeThumb) {
@@ -689,9 +923,10 @@ const App = (() => {
   }
 
   function updatePageCounter() {
+    const tab = currentTab();
     if (dom.pageCounter) {
-      if (scannedPages.length > 0) {
-        dom.pageCounter.textContent = `${activePageIndex + 1} / ${scannedPages.length}`;
+      if (tab.scannedPages.length > 0) {
+        dom.pageCounter.textContent = `${tab.activePageIndex + 1} / ${tab.scannedPages.length}`;
         dom.pageCounter.classList.remove('hidden');
       } else {
         dom.pageCounter.classList.add('hidden');
@@ -700,7 +935,8 @@ const App = (() => {
   }
 
   function resetFilterUI() {
-    currentFilter = 'color';
+    const tab = currentTab();
+    if (tab) tab.currentFilter = 'color';
     dom.filterBtns.forEach(b => b.classList.remove('active'));
     document.getElementById('filter-color').classList.add('active');
   }
@@ -708,22 +944,23 @@ const App = (() => {
   // ======== Download ========
 
   function downloadAllImages() {
-    if (scannedPages.length === 0) {
+    const tab = currentTab();
+    if (tab.scannedPages.length === 0) {
       showToast('No hay páginas para descargar', 'warning');
       return;
     }
 
     try {
-      if (scannedPages.length === 1) {
+      if (tab.scannedPages.length === 1) {
         const link = document.createElement('a');
         link.download = `pablito-leans-scan-${Date.now()}.png`;
-        link.href = scannedPages[0].dataUrl;
+        link.href = tab.scannedPages[0].dataUrl;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         showToast('Imagen descargada', 'success');
       } else {
-        scannedPages.forEach((page, i) => {
+        tab.scannedPages.forEach((page, i) => {
           setTimeout(() => {
             const link = document.createElement('a');
             link.download = `pablito-leans-pag${i + 1}-${Date.now()}.png`;
@@ -733,7 +970,7 @@ const App = (() => {
             document.body.removeChild(link);
           }, i * 300);
         });
-        showToast(`Descargando ${scannedPages.length} imágenes…`, 'success');
+        showToast(`Descargando ${tab.scannedPages.length} imágenes…`, 'success');
       }
     } catch (err) {
       showToast('Error al descargar', 'error');
@@ -741,7 +978,8 @@ const App = (() => {
   }
 
   function downloadPdf() {
-    if (scannedPages.length === 0) {
+    const tab = currentTab();
+    if (tab.scannedPages.length === 0) {
       showToast('No hay páginas para exportar', 'warning');
       return;
     }
@@ -749,7 +987,6 @@ const App = (() => {
     if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
       showToast('Cargando librería PDF…', 'info');
       const script = document.createElement('script');
-      // Changed CDN version to 2.5.1 since 2.5.2 was returning 404
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
       script.onload = () => generatePdf();
       script.onerror = () => showToast('Error al cargar la librería PDF', 'error');
@@ -761,9 +998,10 @@ const App = (() => {
   }
 
   function generatePdf() {
+    const tab = currentTab();
     try {
       const { jsPDF } = window.jspdf;
-      const firstPage = scannedPages[0];
+      const firstPage = tab.scannedPages[0];
       const isLandscape = firstPage.width > firstPage.height;
 
       const pdf = new jsPDF({
@@ -773,7 +1011,7 @@ const App = (() => {
         hotfixes: ['px_scaling']
       });
 
-      scannedPages.forEach((page, i) => {
+      tab.scannedPages.forEach((page, i) => {
         if (i > 0) {
           const pageLandscape = page.width > page.height;
           pdf.addPage([page.width, page.height], pageLandscape ? 'landscape' : 'portrait');
@@ -788,8 +1026,8 @@ const App = (() => {
         );
       });
 
-      pdf.save(`pablito-leans-${scannedPages.length}pag-${Date.now()}.pdf`);
-      showToast(`PDF con ${scannedPages.length} página(s) descargado`, 'success');
+      pdf.save(`pablito-leans-${tab.scannedPages.length}pag-${Date.now()}.pdf`);
+      showToast(`PDF con ${tab.scannedPages.length} página(s) descargado`, 'success');
     } catch (err) {
       console.error('[App] PDF generation error:', err);
       showToast('Error al generar PDF', 'error');
