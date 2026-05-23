@@ -444,10 +444,24 @@ button {
   border-radius: var(--radius-sm);
   overflow: hidden;
   border: 2px solid transparent;
-  cursor: pointer;
+  cursor: grab;
   transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
   background: var(--bg-secondary);
   scroll-snap-align: start;
+}
+
+.page-thumb:active {
+  cursor: grabbing;
+}
+
+.page-thumb.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+.page-thumb.drag-over {
+  border-color: var(--accent);
+  transform: scale(1.05);
 }
 
 .page-thumb img {
