@@ -31,7 +31,6 @@ const App = (() => {
     dom.uploadZone = document.getElementById('upload-zone');
     dom.editorZone = document.getElementById('editor-zone');
     dom.resultZone = document.getElementById('result-zone');
-    dom.controlsBar = document.getElementById('controls-bar');
     dom.editorControls = document.getElementById('editor-controls');
     dom.resultControls = document.getElementById('result-controls');
     dom.fileInput = document.getElementById('file-input');
@@ -291,9 +290,6 @@ const App = (() => {
     dom.uploadZone.classList.add('hidden');
     dom.editorZone.classList.add('hidden');
     dom.resultZone.classList.add('hidden');
-    dom.controlsBar.classList.add('hidden');
-    dom.editorControls.classList.add('hidden');
-    dom.resultControls.classList.add('hidden');
 
     switch (state) {
       case 'upload':
@@ -302,14 +298,10 @@ const App = (() => {
 
       case 'editor':
         dom.editorZone.classList.remove('hidden');
-        dom.controlsBar.classList.remove('hidden');
-        dom.editorControls.classList.remove('hidden');
         break;
 
       case 'result':
         dom.resultZone.classList.remove('hidden');
-        dom.controlsBar.classList.remove('hidden');
-        dom.resultControls.classList.remove('hidden');
         break;
     }
   }
