@@ -50,7 +50,10 @@ const Scanner = (() => {
         const contour = contours.get(i);
         const area = cv.contourArea(contour);
 
-        if (area < minArea) continue;
+        if (area < minArea) {
+          contour.delete();
+          continue;
+        }
 
         // Approximate the contour to a polygon
         const approx = new cv.Mat();
@@ -64,6 +67,8 @@ const Scanner = (() => {
         } else {
           approx.delete();
         }
+        
+        contour.delete();
       }
 
       if (!bestContour) return null;
