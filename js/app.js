@@ -4,6 +4,9 @@
  * and document tabs (max 3 simultaneous documents).
  */
 
+import { Scanner } from './scanner.js';
+import { Corners } from './corners.js';
+
 const App = (() => {
   'use strict';
 
@@ -360,14 +363,17 @@ const App = (() => {
     
     if (!files || files.length === 0) return;
 
-    const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    const validFiles = Array.from(files).filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
     
     if (validFiles.length === 0) {
-      showToast('No se encontraron imágenes válidas', 'error');
+      showToast('No se encontraron imágenes o PDFs válidos', 'error');
       return;
     }
 
-    if (validFiles.length === 1) {
+    if (validFiles.length === 1 && validFiles[0].type === 'application/pdf') {
+      currentTab().isReAdjusting = false;
+      processPdf(validFiles[0]);
+    } else if (validFiles.length === 1) {
       currentTab().isReAdjusting = false;
       loadSingleImageToEditor(validFiles[0]);
     } else {
@@ -393,6 +399,77 @@ const App = (() => {
     reader.readAsDataURL(file);
   }
 
+  async function processPdf(file, isBulk = false) {
+    const tab = currentTab();
+    showToast('Procesando PDF...', 'info');
+
+    try {
+      if (typeof pdfjsLib === 'undefined') {
+        showToast('La librería PDF.js no está cargada aún', 'error');
+        return;
+      }
+      const fileUrl = URL.createObjectURL(file);
+      const loadingTask = pdfjsLib.getDocument(fileUrl);
+      const pdf = await loadingTask.promise;
+      
+      for (let i = 1; i <= pdf.numPages; i++) {
+        showToast(`Procesando página ${i}/${pdf.numPages} del PDF...`, 'info');
+        const page = await pdf.getPage(i);
+        
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+        
+        const mat = cv.imread(canvas);
+        const filtered = Scanner.applyFilter(mat, 'color');
+        
+        const outCanvas = document.createElement('canvas');
+        Scanner.drawToCanvas(filtered, outCanvas);
+        
+        const corners = [
+          {x: 0, y: 0},
+          {x: canvas.width, y: 0},
+          {x: canvas.width, y: canvas.height},
+          {x: 0, y: canvas.height}
+        ];
+        
+        tab.scannedPages.push({
+          originalDataUrl: canvas.toDataURL('image/jpeg', 0.9),
+          corners: corners,
+          warpedDataUrl: canvas.toDataURL('image/png'),
+          dataUrl: outCanvas.toDataURL('image/png'),
+          width: outCanvas.width,
+          height: outCanvas.height,
+          filter: 'color',
+          isPdf: true
+        });
+        
+        mat.delete();
+        filtered.delete();
+      }
+      URL.revokeObjectURL(fileUrl);
+      
+      if (!isBulk) {
+        showToast('PDF procesado exitosamente', 'success');
+        tab.activePageIndex = tab.scannedPages.length - 1;
+        renderPagesStrip();
+        updatePageCounter();
+        renderTabsBar();
+        setState('result');
+      }
+    } catch (error) {
+      console.error('[App] Error processing PDF:', error);
+      showToast('Error al procesar el archivo PDF', 'error');
+    }
+  }
+
   // ======== Bulk Processing ========
 
   async function processBulkQueue() {
@@ -410,18 +487,23 @@ const App = (() => {
 
     const file = bulkQueue.shift();
     const remaining = bulkQueue.length;
-    showToast(`Procesando imagen... (${remaining} restantes)`, 'info');
+    showToast(`Procesando archivo... (${remaining} restantes)`, 'info');
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        autoScanImage(img);
-        setTimeout(processBulkQueue, 100);
+    if (file.type === 'application/pdf') {
+      await processPdf(file, true);
+      setTimeout(processBulkQueue, 100);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          autoScanImage(img);
+          setTimeout(processBulkQueue, 100);
+        };
+        img.src = e.target.result;
       };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    }
   }
 
   function autoScanImage(img) {
@@ -439,6 +521,7 @@ const App = (() => {
     const mat = cv.imread(tempCanvas);
 
     let detectedPoints = null;
+    let detectMat = null;
     try {
       const scale = Math.min(600 / imgW, 1);
       const displayW = Math.round(imgW * scale);
@@ -450,7 +533,7 @@ const App = (() => {
       const smallCtx = smallCanvas.getContext('2d');
       smallCtx.drawImage(img, 0, 0, displayW, displayH);
       
-      const detectMat = cv.imread(smallCanvas);
+      detectMat = cv.imread(smallCanvas);
       const result = Scanner.detectEdges(detectMat);
       
       if (result && result.points) {
@@ -459,8 +542,11 @@ const App = (() => {
           y: p.y * (imgH / displayH)
         }));
       }
-      detectMat.delete();
-    } catch(e) {}
+    } catch(e) {
+      console.error('[App] Auto-scan error:', e);
+    } finally {
+      if (detectMat) detectMat.delete();
+    }
 
     if (!detectedPoints) {
       detectedPoints = [
@@ -593,8 +679,9 @@ const App = (() => {
     let detectedPoints = predefinedCorners;
 
     if (!detectedPoints) {
+      let detectMat = null;
       try {
-        const detectMat = cv.imread(dom.canvasInput);
+        detectMat = cv.imread(dom.canvasInput);
         const result = Scanner.detectEdges(detectMat);
         if (result && result.points) {
           detectedPoints = result.points.map(p => ({
@@ -605,9 +692,10 @@ const App = (() => {
         } else {
           showToast('No se detectó documento. Ajusta las esquinas.', 'info');
         }
-        detectMat.delete();
       } catch (err) {
         showToast('Ajusta las esquinas manualmente', 'info');
+      } finally {
+        if (detectMat) detectMat.delete();
       }
     }
 
@@ -798,6 +886,15 @@ const App = (() => {
     img.src = page.dataUrl;
 
     updatePageCounter();
+
+    if (dom.btnReadjust) {
+      if (page.isPdf) {
+        dom.btnReadjust.style.display = 'none';
+      } else {
+        dom.btnReadjust.style.display = 'inline-flex';
+      }
+    }
+
     highlightActiveThumb();
   }
 

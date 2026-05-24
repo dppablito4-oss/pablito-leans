@@ -1,0 +1,16 @@
+{
+  "name": "Pablito Leans",
+  "short_name": "Pablito Leans",
+  "description": "Escáner de documentos privado directamente en tu navegador.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#07070d",
+  "theme_color": "#07070d",
+  "icons": [
+    {
+      "src": "assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -3,8 +3,7 @@
  * Manages 4 draggable corner nodes on a canvas overlay for manual document edge adjustment.
  */
 
-const Corners = (() => {
-  'use strict';
+
 
   // State
   let overlayCanvas = null;
@@ -258,10 +257,9 @@ const Corners = (() => {
   }
 
   // Public API
-  return {
+  export const Corners = {
     init,
     getPoints,
     destroy,
     draw
   };
-})();

@@ -3,8 +3,7 @@
  * Handles edge detection, perspective warp, and image filters.
  */
 
-const Scanner = (() => {
-  'use strict';
+
 
   /**
    * Detect the largest quadrilateral contour in the image.
@@ -404,7 +403,7 @@ const Scanner = (() => {
   }
 
   // Public API
-  return {
+  export const Scanner = {
     detectEdges,
     warpPerspective,
     applyFilter,
@@ -412,4 +411,3 @@ const Scanner = (() => {
     drawToCanvas,
     sortCorners
   };
-})();
