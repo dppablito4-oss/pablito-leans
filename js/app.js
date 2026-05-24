@@ -62,6 +62,7 @@ const App = (() => {
     dom.btnCancel = document.getElementById('btn-cancel');
     dom.btnScan = document.getElementById('btn-scan');
     dom.btnReadjust = document.getElementById('btn-readjust');
+    dom.btnApplyAll = document.getElementById('btn-apply-all');
     dom.btnDownload = document.getElementById('btn-download');
     dom.btnDownloadPdf = document.getElementById('btn-download-pdf');
     dom.btnAddPage = document.getElementById('btn-add-page');
@@ -140,6 +141,7 @@ const App = (() => {
     dom.btnCancel.addEventListener('click', handleCancel);
     dom.btnScan.addEventListener('click', performScan);
     dom.btnReadjust.addEventListener('click', startReAdjust);
+    dom.btnApplyAll.addEventListener('click', applyFilterToAllPages);
     dom.btnDownload.addEventListener('click', downloadAllImages);
     dom.btnDownloadPdf.addEventListener('click', downloadPdf);
     dom.btnAddPage.addEventListener('click', addAnotherPage);
@@ -836,7 +838,52 @@ const App = (() => {
     img.src = page.warpedDataUrl;
   }
 
-  // ======== Multi-page Navigation ========
+  async function applyFilterToAllPages() {
+    const tab = currentTab();
+    if (tab.scannedPages.length <= 1) {
+      showToast('No hay suficientes páginas adicionales', 'info');
+      return;
+    }
+
+    const currentFilter = tab.currentFilter;
+    showToast(`Aplicando filtro a todas las páginas...`, 'info');
+
+    for (let i = 0; i < tab.scannedPages.length; i++) {
+      const page = tab.scannedPages[i];
+      if (page.filter === currentFilter) continue;
+
+      await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = img.naturalWidth;
+          tempCanvas.height = img.naturalHeight;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(img, 0, 0);
+
+          const mat = cv.imread(tempCanvas);
+          const filtered = Scanner.applyFilter(mat, currentFilter);
+          
+          const outCanvas = document.createElement('canvas');
+          Scanner.drawToCanvas(filtered, outCanvas);
+          
+          page.dataUrl = outCanvas.toDataURL('image/png');
+          page.filter = currentFilter;
+          
+          mat.delete();
+          filtered.delete();
+          resolve();
+        };
+        img.src = page.warpedDataUrl;
+      });
+    }
+
+    showActivePage();
+    renderPagesStrip();
+    showToast('Filtro aplicado a todas las páginas', 'success');
+  }
+
+  // ======== Page Actions ========
 
   function addAnotherPage() {
     currentTab().isReAdjusting = false;
