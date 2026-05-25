@@ -1087,37 +1087,117 @@ const App = (() => {
 
   // ======== Download ========
 
-  function downloadAllImages() {
+  function parsePageRange(rangeStr, maxPages) {
+    if (!rangeStr || rangeStr.trim() === '') {
+      return Array.from({ length: maxPages }, (_, i) => i);
+    }
+    const pages = new Set();
+    const parts = rangeStr.split(',');
+    for (let part of parts) {
+      part = part.trim();
+      if (part.includes('-')) {
+        const [start, end] = part.split('-').map(n => parseInt(n, 10));
+        if (!isNaN(start) && !isNaN(end) && start <= end) {
+          for (let i = start; i <= end; i++) {
+            if (i >= 1 && i <= maxPages) pages.add(i - 1);
+          }
+        }
+      } else {
+        const page = parseInt(part, 10);
+        if (!isNaN(page) && page >= 1 && page <= maxPages) {
+          pages.add(page - 1);
+        }
+      }
+    }
+    return Array.from(pages).sort((a, b) => a - b);
+  }
+
+  async function downloadAllImages() {
     const tab = currentTab();
     if (tab.scannedPages.length === 0) {
       showToast('No hay páginas para descargar', 'warning');
       return;
     }
 
+    let pagesToExport = tab.scannedPages;
+    if (tab.scannedPages.length > 1) {
+      const rangeStr = window.prompt(`¿Qué páginas deseas descargar?\nIngresa el rango (1 a ${tab.scannedPages.length}) o deja en blanco para TODAS.\nEjemplo: 1-3, 5`, "");
+      if (rangeStr === null) return; // Cancelado
+      const indices = parsePageRange(rangeStr, tab.scannedPages.length);
+      if (indices.length === 0) {
+        showToast('Rango de páginas no válido', 'error');
+        return;
+      }
+      pagesToExport = indices.map(i => tab.scannedPages[i]);
+    }
+
     try {
-      if (tab.scannedPages.length === 1) {
-        const link = document.createElement('a');
-        link.download = `pablito-leans-scan-${Date.now()}.png`;
-        link.href = tab.scannedPages[0].dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showToast('Imagen descargada', 'success');
+      if (pagesToExport.length === 1) {
+        const page = pagesToExport[0];
+        const res = await fetch(page.dataUrl);
+        const blob = await res.blob();
+        if (window.showSaveFilePicker) {
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName: `pablito-leans-pag-${Date.now()}.jpg`,
+              types: [{ description: 'Imagen JPEG', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            showToast('Imagen guardada con éxito', 'success');
+          } catch(e) { 
+            if(e.name !== 'AbortError') showToast('Error al guardar', 'error'); 
+          }
+        } else {
+          const link = document.createElement('a');
+          link.download = `pablito-leans-pag-${Date.now()}.jpg`;
+          link.href = page.dataUrl;
+          link.click();
+          showToast('Imagen descargada', 'success');
+        }
       } else {
-        tab.scannedPages.forEach((page, i) => {
-          setTimeout(() => {
-            const link = document.createElement('a');
-            link.download = `pablito-leans-pag${i + 1}-${Date.now()}.png`;
-            link.href = page.dataUrl;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }, i * 300);
-        });
-        showToast(`Descargando ${tab.scannedPages.length} imágenes…`, 'success');
+        if (typeof JSZip === 'undefined') {
+          showToast('Error: Librería JSZip no cargada', 'error');
+          return;
+        }
+        showToast('Comprimiendo imágenes en ZIP...', 'info');
+        
+        // Pequeña pausa para permitir que el UI se actualice
+        await new Promise(r => setTimeout(r, 100));
+
+        const zip = new JSZip();
+        for (let i = 0; i < pagesToExport.length; i++) {
+          const page = pagesToExport[i];
+          const base64Data = page.dataUrl.split(',')[1];
+          zip.file(`pagina_${i + 1}.jpg`, base64Data, { base64: true });
+        }
+        
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        if (window.showSaveFilePicker) {
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName: `pablito-leans-${pagesToExport.length}imagenes-${Date.now()}.zip`,
+              types: [{ description: 'Archivo ZIP', accept: { 'application/zip': ['.zip'] } }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(zipBlob);
+            await writable.close();
+            showToast(`ZIP guardado con éxito`, 'success');
+          } catch(e) { 
+            if(e.name !== 'AbortError') showToast('Error al guardar', 'error'); 
+          }
+        } else {
+          const link = document.createElement('a');
+          link.download = `pablito-leans-${pagesToExport.length}imagenes-${Date.now()}.zip`;
+          link.href = URL.createObjectURL(zipBlob);
+          link.click();
+          showToast(`ZIP descargado`, 'success');
+        }
       }
     } catch (err) {
-      showToast('Error al descargar', 'error');
+      console.error(err);
+      showToast('Error al descargar imágenes', 'error');
     }
   }
 
@@ -1144,13 +1224,25 @@ const App = (() => {
   async function generatePdf() {
     const tab = currentTab();
     try {
+      let pagesToExport = tab.scannedPages;
+      if (tab.scannedPages.length > 1) {
+        const rangeStr = window.prompt(`¿Qué páginas deseas exportar en PDF?\nIngresa el rango (1 a ${tab.scannedPages.length}) o deja en blanco para TODAS.\nEjemplo: 1-3, 5`, "");
+        if (rangeStr === null) return;
+        const indices = parsePageRange(rangeStr, tab.scannedPages.length);
+        if (indices.length === 0) {
+          showToast('Rango de páginas no válido', 'error');
+          return;
+        }
+        pagesToExport = indices.map(i => tab.scannedPages[i]);
+      }
+
       showToast('Generando PDF, por favor espera...', 'info');
       
       // Pequeña pausa para permitir que el UI se actualice
       await new Promise(r => setTimeout(r, 100));
 
       const { jsPDF } = window.jspdf;
-      const firstPage = tab.scannedPages[0];
+      const firstPage = pagesToExport[0];
       const isLandscape = firstPage.width > firstPage.height;
 
       const pdf = new jsPDF({
@@ -1160,8 +1252,8 @@ const App = (() => {
         hotfixes: ['px_scaling']
       });
 
-      for (let i = 0; i < tab.scannedPages.length; i++) {
-        const page = tab.scannedPages[i];
+      for (let i = 0; i < pagesToExport.length; i++) {
+        const page = pagesToExport[i];
         
         if (i > 0) {
           const pageLandscape = page.width > page.height;
@@ -1184,7 +1276,7 @@ const App = (() => {
         try {
           const pdfBlob = pdf.output('blob');
           const handle = await window.showSaveFilePicker({
-            suggestedName: `pablito-leans-${tab.scannedPages.length}pag-${Date.now()}.pdf`,
+            suggestedName: `pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`,
             types: [{
               description: 'Documento PDF',
               accept: { 'application/pdf': ['.pdf'] },
@@ -1202,8 +1294,8 @@ const App = (() => {
         }
       } else {
         // Fallback automático
-        pdf.save(`pablito-leans-${tab.scannedPages.length}pag-${Date.now()}.pdf`);
-        showToast(`PDF con ${tab.scannedPages.length} página(s) descargado`, 'success');
+        pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
+        showToast(`PDF con ${pagesToExport.length} página(s) descargado`, 'success');
       }
     } catch (err) {
       console.error('[App] PDF generation error:', err);
