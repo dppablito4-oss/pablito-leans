@@ -445,8 +445,8 @@ const App = (() => {
         tab.scannedPages.push({
           originalDataUrl: canvas.toDataURL('image/jpeg', 0.9),
           corners: corners,
-          warpedDataUrl: canvas.toDataURL('image/png'),
-          dataUrl: outCanvas.toDataURL('image/png'),
+          warpedDataUrl: canvas.toDataURL('image/jpeg', 0.9),
+          dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
           width: outCanvas.width,
           height: outCanvas.height,
           filter: 'color',
@@ -573,8 +573,8 @@ const App = (() => {
     tab.scannedPages.push({
       originalDataUrl,
       corners: detectedPoints,
-      warpedDataUrl: warpCanvas.toDataURL('image/png'),
-      dataUrl: outCanvas.toDataURL('image/png'),
+      warpedDataUrl: warpCanvas.toDataURL('image/jpeg', 0.9),
+      dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
       width: outCanvas.width,
       height: outCanvas.height,
       filter: 'color'
@@ -867,8 +867,8 @@ const App = (() => {
           const outCanvas = document.createElement('canvas');
           Scanner.drawToCanvas(filtered, outCanvas);
           
-          page.dataUrl = outCanvas.toDataURL('image/png');
-          page.filter = currentFilter;
+          page.dataUrl = outCanvas.toDataURL('image/jpeg', 0.9);
+          page.filter = tab.currentFilter;
           
           mat.delete();
           filtered.delete();
@@ -1141,9 +1141,14 @@ const App = (() => {
     generatePdf();
   }
 
-  function generatePdf() {
+  async function generatePdf() {
     const tab = currentTab();
     try {
+      showToast('Generando PDF, por favor espera...', 'info');
+      
+      // Pequeña pausa para permitir que el UI se actualice
+      await new Promise(r => setTimeout(r, 100));
+
       const { jsPDF } = window.jspdf;
       const firstPage = tab.scannedPages[0];
       const isLandscape = firstPage.width > firstPage.height;
@@ -1155,7 +1160,9 @@ const App = (() => {
         hotfixes: ['px_scaling']
       });
 
-      tab.scannedPages.forEach((page, i) => {
+      for (let i = 0; i < tab.scannedPages.length; i++) {
+        const page = tab.scannedPages[i];
+        
         if (i > 0) {
           const pageLandscape = page.width > page.height;
           pdf.addPage([page.width, page.height], pageLandscape ? 'landscape' : 'portrait');
@@ -1163,18 +1170,44 @@ const App = (() => {
 
         pdf.addImage(
           page.dataUrl,
-          'PNG',
+          'JPEG',
           0, 0,
           page.width,
-          page.height
+          page.height,
+          undefined,
+          'FAST'
         );
-      });
+      }
 
-      pdf.save(`pablito-leans-${tab.scannedPages.length}pag-${Date.now()}.pdf`);
-      showToast(`PDF con ${tab.scannedPages.length} página(s) descargado`, 'success');
+      // Preguntar al usuario dónde guardar si el navegador lo soporta
+      if (window.showSaveFilePicker) {
+        try {
+          const pdfBlob = pdf.output('blob');
+          const handle = await window.showSaveFilePicker({
+            suggestedName: `pablito-leans-${tab.scannedPages.length}pag-${Date.now()}.pdf`,
+            types: [{
+              description: 'Documento PDF',
+              accept: { 'application/pdf': ['.pdf'] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(pdfBlob);
+          await writable.close();
+          showToast(`PDF guardado con éxito`, 'success');
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            console.error(err);
+            showToast('Error al guardar el archivo', 'error');
+          }
+        }
+      } else {
+        // Fallback automático
+        pdf.save(`pablito-leans-${tab.scannedPages.length}pag-${Date.now()}.pdf`);
+        showToast(`PDF con ${tab.scannedPages.length} página(s) descargado`, 'success');
+      }
     } catch (err) {
       console.error('[App] PDF generation error:', err);
-      showToast('Error al generar PDF', 'error');
+      showToast('Error al generar PDF. Intenta con menos páginas.', 'error');
     }
   }
 
