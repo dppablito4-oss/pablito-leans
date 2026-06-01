@@ -91,6 +91,11 @@ const App = (() => {
     dom.pdfPageRange = document.getElementById('pdf-page-range');
     dom.pdfPageSize = document.getElementById('pdf-page-size');
     dom.pdfFitOptions = document.querySelectorAll('input[name="pdf-fit"]');
+
+    // Manual Adjustments
+    dom.manualAdjustments = document.getElementById('manual-adjustments');
+    dom.adjBgClean = document.getElementById('adj-bg-clean');
+    dom.adjSaturation = document.getElementById('adj-saturation');
   }
 
   // ======== Initialization ========
@@ -184,6 +189,14 @@ const App = (() => {
         reapplyFilterToActivePage();
       });
     });
+
+    // Sliders
+    if (dom.adjBgClean) {
+      dom.adjBgClean.addEventListener('change', reapplyFilterToActivePage);
+    }
+    if (dom.adjSaturation) {
+      dom.adjSaturation.addEventListener('change', reapplyFilterToActivePage);
+    }
   }
 
   // ======== Tab Management ========
@@ -857,7 +870,16 @@ const App = (() => {
 
       const mat = cv.imread(tempCanvas);
       try {
-        const filtered = Scanner.applyFilter(mat, tab.currentFilter);
+        let options = {};
+        if (tab.currentFilter === 'manual') {
+          options = {
+            bgClean: dom.adjBgClean ? parseInt(dom.adjBgClean.value) : 50,
+            saturation: dom.adjSaturation ? parseInt(dom.adjSaturation.value) : 100
+          };
+          page.manualOptions = options;
+        }
+
+        const filtered = Scanner.applyFilter(mat, tab.currentFilter, options);
         Scanner.drawToCanvas(filtered, dom.canvasOutput);
 
         page.dataUrl = dom.canvasOutput.toDataURL('image/png');
@@ -874,6 +896,14 @@ const App = (() => {
       mat.delete();
     };
     img.src = page.warpedDataUrl;
+    
+    if (dom.manualAdjustments) {
+      if (tab.currentFilter === 'manual') {
+        dom.manualAdjustments.classList.remove('hidden');
+      } else {
+        dom.manualAdjustments.classList.add('hidden');
+      }
+    }
   }
 
   async function applyFilterToAllPages() {
@@ -900,7 +930,16 @@ const App = (() => {
           tempCtx.drawImage(img, 0, 0);
 
           const mat = cv.imread(tempCanvas);
-          const filtered = Scanner.applyFilter(mat, currentFilter);
+          
+          let options = {};
+          if (currentFilter === 'manual') {
+             // Use the active page's manual settings for all pages if available
+             const activePage = tab.scannedPages[tab.activePageIndex];
+             options = activePage.manualOptions || { bgClean: 50, saturation: 100 };
+             page.manualOptions = { ...options };
+          }
+          
+          const filtered = Scanner.applyFilter(mat, currentFilter, options);
           
           const outCanvas = document.createElement('canvas');
           Scanner.drawToCanvas(filtered, outCanvas);
@@ -977,6 +1016,18 @@ const App = (() => {
         dom.btnReadjust.style.display = 'none';
       } else {
         dom.btnReadjust.style.display = 'inline-flex';
+      }
+    }
+
+    if (dom.manualAdjustments) {
+      if (tab.currentFilter === 'manual') {
+        dom.manualAdjustments.classList.remove('hidden');
+        if (page.manualOptions) {
+          if (dom.adjBgClean) dom.adjBgClean.value = page.manualOptions.bgClean;
+          if (dom.adjSaturation) dom.adjSaturation.value = page.manualOptions.saturation;
+        }
+      } else {
+        dom.manualAdjustments.classList.add('hidden');
       }
     }
 

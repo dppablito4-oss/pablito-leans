@@ -136,17 +136,29 @@
           <button class="filter-option" data-filter="sepia" id="filter-sepia">Sepia</button>
           <button class="filter-option" data-filter="sketch" id="filter-sketch">Boceto</button>
           <button class="filter-option" data-filter="highcontrast" id="filter-highcontrast">Alto Contraste</button>
+          <button class="filter-option" data-filter="manual" id="filter-manual">Ajuste Digital</button>
+        </div>
+
+        <div class="manual-adjustments hidden" id="manual-adjustments">
+          <div class="slider-group">
+            <label for="adj-bg-clean">Limpiar Fondo (Umbral)</label>
+            <input type="range" id="adj-bg-clean" class="styled-slider" min="0" max="100" value="50">
+          </div>
+          <div class="slider-group">
+            <label for="adj-saturation">Saturación (Color)</label>
+            <input type="range" id="adj-saturation" class="styled-slider" min="0" max="200" value="100">
+          </div>
         </div>
 
         <div id="result-controls" class="controls-panel">
           <button class="btn btn-secondary" id="btn-readjust" type="button" title="Re-ajustar esquinas">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="1 4 1 10 7 10"/>
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              <path d="M3 3h18v18H3zM8 3v18M16 3v18M3 8h18M3 16h18"/>
             </svg>
             Re-ajustar
           </button>
-          <button class="btn btn-secondary" id="btn-apply-all" type="button" title="Aplicar filtro actual a todas">
+          <button class="btn btn-secondary" id="btn-apply-all" type="button" title="Aplicar filtro a todas">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="12 2 2 7 12 12 22 7 12 2"/>
               <polyline points="2 17 12 22 22 17"/>

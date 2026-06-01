@@ -170,10 +170,13 @@
    *
    * @param {cv.Mat} src - Source image (the warped result, RGBA)
    * @param {string} mode - Filter mode
+   * @param {Object} options - Additional options like saturation, bgClean
    * @returns {cv.Mat} Filtered image (RGBA)
    */
-  function applyFilter(src, mode) {
+  function applyFilter(src, mode, options = {}) {
     switch (mode) {
+      case 'manual':
+        return filterManual(src, options);
       case 'document':
         return filterDocument(src);
       case 'whiteboard':
@@ -190,6 +193,63 @@
       default:
         return filterColor(src);
     }
+  }
+
+  // ---- Filter: Manual (Custom Background Clean & Saturation) ----
+  function filterManual(src, options) {
+    const bgCleanVal = options.bgClean !== undefined ? parseInt(options.bgClean) : 50; // 0 to 100
+    const satVal = options.saturation !== undefined ? parseInt(options.saturation) : 100; // 0 to 200
+
+    const rgb = new cv.Mat();
+    cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+
+    // 1. Background Clean
+    let cleaned = new cv.Mat();
+    if (bgCleanVal > 0) {
+      const bg = new cv.Mat();
+      cv.GaussianBlur(rgb, bg, new cv.Size(51, 51), 0);
+
+      const divided = new cv.Mat();
+      cv.divide(rgb, bg, divided, 255.0);
+
+      const clamped = new cv.Mat();
+      cv.normalize(divided, clamped, 0, 255, cv.NORM_MINMAX);
+
+      const alpha = 1.0 + (bgCleanVal / 100) * 0.5;
+      const beta = (bgCleanVal / 100) * 30;
+      clamped.convertTo(cleaned, -1, alpha, beta);
+
+      bg.delete(); divided.delete(); clamped.delete();
+    } else {
+      rgb.copyTo(cleaned);
+    }
+
+    // 2. Saturation
+    let result = new cv.Mat();
+    if (satVal !== 100) {
+      const hsv = new cv.Mat();
+      cv.cvtColor(cleaned, hsv, cv.COLOR_RGB2HSV);
+      
+      const channels = new cv.MatVector();
+      cv.split(hsv, channels);
+      
+      const s = channels.get(1);
+      const satScale = satVal / 100.0;
+      s.convertTo(s, -1, satScale, 0);
+      
+      cv.merge(channels, hsv);
+      cv.cvtColor(hsv, result, cv.COLOR_HSV2RGB);
+      
+      hsv.delete(); channels.delete(); s.delete();
+    } else {
+      cleaned.copyTo(result);
+    }
+
+    const rgba = new cv.Mat();
+    cv.cvtColor(result, rgba, cv.COLOR_RGB2RGBA);
+
+    rgb.delete(); cleaned.delete(); result.delete();
+    return rgba;
   }
 
   // ---- Filter: Color (Enhanced) ----
