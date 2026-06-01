@@ -1012,11 +1012,7 @@ const App = (() => {
     updatePageCounter();
 
     if (dom.btnReadjust) {
-      if (page.isPdf) {
-        dom.btnReadjust.style.display = 'none';
-      } else {
-        dom.btnReadjust.style.display = 'inline-flex';
-      }
+      dom.btnReadjust.style.display = 'inline-flex';
     }
 
     if (dom.manualAdjustments) {
