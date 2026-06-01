@@ -82,6 +82,15 @@ const App = (() => {
     dom.tabsBar = document.getElementById('tabs-bar');
     dom.tabsList = document.getElementById('tabs-list');
     dom.btnAddTab = document.getElementById('btn-add-tab');
+    
+    // PDF Modal
+    dom.pdfModal = document.getElementById('pdf-modal-overlay');
+    dom.btnPdfClose = document.getElementById('pdf-modal-close');
+    dom.btnPdfCancel = document.getElementById('pdf-modal-cancel');
+    dom.btnPdfConfirm = document.getElementById('pdf-modal-confirm');
+    dom.pdfPageRange = document.getElementById('pdf-page-range');
+    dom.pdfPageSize = document.getElementById('pdf-page-size');
+    dom.pdfFitOptions = document.querySelectorAll('input[name="pdf-fit"]');
   }
 
   // ======== Initialization ========
@@ -89,6 +98,14 @@ const App = (() => {
   function init() {
     cacheDom();
     bindEvents();
+
+    window.addEventListener('beforeunload', (e) => {
+      const hasPages = tabs.some(tab => tab.scannedPages.length > 0);
+      if (hasPages) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
 
     // Create the first tab
     tabs.push(createTabData());
@@ -146,6 +163,11 @@ const App = (() => {
     dom.btnDownloadPdf.addEventListener('click', downloadPdf);
     dom.btnAddPage.addEventListener('click', addAnotherPage);
     dom.btnDeletePage.addEventListener('click', deleteActivePage);
+
+    // PDF Modal
+    if (dom.btnPdfClose) dom.btnPdfClose.addEventListener('click', closePdfModal);
+    if (dom.btnPdfCancel) dom.btnPdfCancel.addEventListener('click', closePdfModal);
+    if (dom.btnPdfConfirm) dom.btnPdfConfirm.addEventListener('click', confirmPdfExport);
 
     // Tab controls
     dom.btnAddTab.addEventListener('click', addNewTab);
@@ -418,7 +440,15 @@ const App = (() => {
         showToast(`Procesando página ${i}/${pdf.numPages} del PDF...`, 'info');
         const page = await pdf.getPage(i);
         
-        const viewport = page.getViewport({ scale: 2.0 });
+        const initialViewport = page.getViewport({ scale: 1.0 });
+        const maxDim = Math.max(initialViewport.width, initialViewport.height);
+        let scale = 1.0;
+        if (maxDim > 2500) {
+          scale = 2500 / maxDim;
+        } else if (maxDim < 1000) {
+          scale = 2.0;
+        }
+        const viewport = page.getViewport({ scale });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.width = viewport.width;
@@ -429,32 +459,36 @@ const App = (() => {
           viewport: viewport
         }).promise;
         
-        const mat = cv.imread(canvas);
-        const filtered = Scanner.applyFilter(mat, 'color');
-        
-        const outCanvas = document.createElement('canvas');
-        Scanner.drawToCanvas(filtered, outCanvas);
-        
-        const corners = [
-          {x: 0, y: 0},
-          {x: canvas.width, y: 0},
-          {x: canvas.width, y: canvas.height},
-          {x: 0, y: canvas.height}
-        ];
-        
-        tab.scannedPages.push({
-          originalDataUrl: canvas.toDataURL('image/jpeg', 0.9),
-          corners: corners,
-          warpedDataUrl: canvas.toDataURL('image/jpeg', 0.9),
-          dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
-          width: outCanvas.width,
-          height: outCanvas.height,
-          filter: 'color',
-          isPdf: true
-        });
-        
-        mat.delete();
-        filtered.delete();
+        let mat = null;
+        let filtered = null;
+        try {
+          mat = cv.imread(canvas);
+          filtered = Scanner.applyFilter(mat, 'color');
+          
+          const outCanvas = document.createElement('canvas');
+          Scanner.drawToCanvas(filtered, outCanvas);
+          
+          const corners = [
+            {x: 0, y: 0},
+            {x: canvas.width, y: 0},
+            {x: canvas.width, y: canvas.height},
+            {x: 0, y: canvas.height}
+          ];
+          
+          tab.scannedPages.push({
+            originalDataUrl: canvas.toDataURL('image/jpeg', 0.9),
+            corners: corners,
+            warpedDataUrl: canvas.toDataURL('image/jpeg', 0.9),
+            dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
+            width: outCanvas.width,
+            height: outCanvas.height,
+            filter: 'color',
+            isPdf: true
+          });
+        } finally {
+          if (mat) mat.delete();
+          if (filtered) filtered.delete();
+        }
       }
       URL.revokeObjectURL(fileUrl);
       
@@ -559,30 +593,34 @@ const App = (() => {
       ];
     }
 
-    const warped = Scanner.warpPerspective(mat, detectedPoints);
-    const filtered = Scanner.applyFilter(warped, 'color');
+    let warped = null;
+    let filtered = null;
+    try {
+      warped = Scanner.warpPerspective(mat, detectedPoints);
+      filtered = Scanner.applyFilter(warped, 'color');
 
-    const outCanvas = document.createElement('canvas');
-    Scanner.drawToCanvas(filtered, outCanvas);
+      const outCanvas = document.createElement('canvas');
+      Scanner.drawToCanvas(filtered, outCanvas);
 
-    const warpCanvas = document.createElement('canvas');
-    warpCanvas.width = warped.cols;
-    warpCanvas.height = warped.rows;
-    cv.imshow(warpCanvas, warped);
+      const warpCanvas = document.createElement('canvas');
+      warpCanvas.width = warped.cols;
+      warpCanvas.height = warped.rows;
+      cv.imshow(warpCanvas, warped);
 
-    tab.scannedPages.push({
-      originalDataUrl,
-      corners: detectedPoints,
-      warpedDataUrl: warpCanvas.toDataURL('image/jpeg', 0.9),
-      dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
-      width: outCanvas.width,
-      height: outCanvas.height,
-      filter: 'color'
-    });
-
-    mat.delete();
-    warped.delete();
-    filtered.delete();
+      tab.scannedPages.push({
+        originalDataUrl,
+        corners: detectedPoints,
+        warpedDataUrl: warpCanvas.toDataURL('image/jpeg', 0.9),
+        dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
+        width: outCanvas.width,
+        height: outCanvas.height,
+        filter: 'color'
+      });
+    } finally {
+      if (mat) mat.delete();
+      if (warped) warped.delete();
+      if (filtered) filtered.delete();
+    }
   }
 
   // ======== State Management ========
@@ -1208,14 +1246,43 @@ const App = (() => {
       return;
     }
 
+    if (dom.pdfPageRange) dom.pdfPageRange.value = '';
+    if (dom.pdfModal) dom.pdfModal.classList.remove('hidden');
+  }
+
+  function closePdfModal() {
+    if (dom.pdfModal) dom.pdfModal.classList.add('hidden');
+  }
+
+  let isJsPdfLoading = false;
+
+  async function confirmPdfExport() {
+    closePdfModal();
+    const tab = currentTab();
+    if (tab.scannedPages.length === 0) return;
+
     if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+      if (isJsPdfLoading) {
+        showToast('Cargando librería PDF, por favor espera...', 'info');
+        return;
+      }
+      isJsPdfLoading = true;
       showToast('Cargando librería PDF…', 'info');
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-      script.onload = () => generatePdf();
-      script.onerror = () => showToast('Error al cargar la librería PDF', 'error');
-      document.head.appendChild(script);
-      return;
+      
+      try {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      } catch (err) {
+        isJsPdfLoading = false;
+        showToast('Error al cargar la librería PDF', 'error');
+        return;
+      }
+      isJsPdfLoading = false;
     }
 
     generatePdf();
@@ -1224,10 +1291,15 @@ const App = (() => {
   async function generatePdf() {
     const tab = currentTab();
     try {
+      const rangeStr = dom.pdfPageRange ? dom.pdfPageRange.value : '';
+      const sizeSelection = dom.pdfPageSize ? dom.pdfPageSize.value : 'A4';
+      let fitMode = 'contain';
+      if (dom.pdfFitOptions) {
+        dom.pdfFitOptions.forEach(opt => { if (opt.checked) fitMode = opt.value; });
+      }
+
       let pagesToExport = tab.scannedPages;
-      if (tab.scannedPages.length > 1) {
-        const rangeStr = window.prompt(`¿Qué páginas deseas exportar en PDF?\nIngresa el rango (1 a ${tab.scannedPages.length}) o deja en blanco para TODAS.\nEjemplo: 1-3, 5`, "");
-        if (rangeStr === null) return;
+      if (rangeStr.trim() !== '') {
         const indices = parsePageRange(rangeStr, tab.scannedPages.length);
         if (indices.length === 0) {
           showToast('Rango de páginas no válido', 'error');
@@ -1237,69 +1309,90 @@ const App = (() => {
       }
 
       showToast('Generando PDF, por favor espera...', 'info');
-      
-      // Pequeña pausa para permitir que el UI se actualice
       await new Promise(r => setTimeout(r, 100));
 
       const { jsPDF } = window.jspdf;
-      const firstPage = pagesToExport[0];
-      const isLandscape = firstPage.width > firstPage.height;
+      
+      const sizesMm = {
+        'A0': [841, 1189],
+        'A1': [594, 841],
+        'A2': [420, 594],
+        'A3': [297, 420],
+        'A4': [210, 297],
+        'A5': [148, 210]
+      };
+      
+      const formatMm = sizesMm[sizeSelection] || sizesMm['A4'];
 
       const pdf = new jsPDF({
-        orientation: isLandscape ? 'landscape' : 'portrait',
-        unit: 'px',
-        format: [firstPage.width, firstPage.height],
-        hotfixes: ['px_scaling']
+        orientation: 'portrait',
+        unit: 'mm',
+        format: formatMm,
+        compress: true
       });
 
       for (let i = 0; i < pagesToExport.length; i++) {
         const page = pagesToExport[i];
+        const pageLandscape = page.width > page.height;
         
-        if (i > 0) {
-          const pageLandscape = page.width > page.height;
-          pdf.addPage([page.width, page.height], pageLandscape ? 'landscape' : 'portrait');
+        let pdfWidth = formatMm[0];
+        let pdfHeight = formatMm[1];
+        
+        if (pageLandscape) {
+           pdfWidth = formatMm[1];
+           pdfHeight = formatMm[0];
         }
 
-        pdf.addImage(
-          page.dataUrl,
-          'JPEG',
-          0, 0,
-          page.width,
-          page.height,
-          undefined,
-          'FAST'
-        );
+        if (i > 0) {
+          pdf.addPage([formatMm[0], formatMm[1]], pageLandscape ? 'landscape' : 'portrait');
+        }
+
+        if (fitMode === 'cover') {
+           pdf.addImage(page.dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+        } else {
+           const imgRatio = page.width / page.height;
+           const pdfRatio = pdfWidth / pdfHeight;
+           
+           let finalW = pdfWidth;
+           let finalH = pdfHeight;
+           let x = 0;
+           let y = 0;
+
+           if (imgRatio > pdfRatio) {
+             finalW = pdfWidth;
+             finalH = pdfWidth / imgRatio;
+             y = (pdfHeight - finalH) / 2;
+           } else {
+             finalH = pdfHeight;
+             finalW = pdfHeight * imgRatio;
+             x = (pdfWidth - finalW) / 2;
+           }
+           
+           pdf.addImage(page.dataUrl, 'JPEG', x, y, finalW, finalH, undefined, 'FAST');
+        }
       }
 
-      // Preguntar al usuario dónde guardar si el navegador lo soporta
       if (window.showSaveFilePicker) {
         try {
           const pdfBlob = pdf.output('blob');
           const handle = await window.showSaveFilePicker({
             suggestedName: `pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`,
-            types: [{
-              description: 'Documento PDF',
-              accept: { 'application/pdf': ['.pdf'] },
-            }],
+            types: [{ description: 'Documento PDF', accept: { 'application/pdf': ['.pdf'] } }]
           });
           const writable = await handle.createWritable();
           await writable.write(pdfBlob);
           await writable.close();
           showToast(`PDF guardado con éxito`, 'success');
         } catch (err) {
-          if (err.name !== 'AbortError') {
-            console.error(err);
-            showToast('Error al guardar el archivo', 'error');
-          }
+          if (err.name !== 'AbortError') showToast('Error al guardar', 'error');
         }
       } else {
-        // Fallback automático
         pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
-        showToast(`PDF con ${pagesToExport.length} página(s) descargado`, 'success');
+        showToast(`PDF descargado`, 'success');
       }
     } catch (err) {
       console.error('[App] PDF generation error:', err);
-      showToast('Error al generar PDF. Intenta con menos páginas.', 'error');
+      showToast('Error al generar PDF.', 'error');
     }
   }
 

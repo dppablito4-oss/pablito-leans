@@ -12,6 +12,10 @@
   let activePointIndex = -1;
   let isDragging = false;
   let canvasRect = null;
+  let stateScaleX = 1;
+  let stateScaleY = 1;
+  let stateImageWidth = 0;
+  let stateImageHeight = 0;
 
   // Config
   const HANDLE_RADIUS = 14;
@@ -42,16 +46,16 @@
     ctx = overlayCanvas.getContext('2d');
 
     // Store scale factors for coordinate conversion
-    overlayCanvas._scaleX = imageWidth / displayWidth;
-    overlayCanvas._scaleY = imageHeight / displayHeight;
-    overlayCanvas._imageWidth = imageWidth;
-    overlayCanvas._imageHeight = imageHeight;
+    stateScaleX = imageWidth / displayWidth;
+    stateScaleY = imageHeight / displayHeight;
+    stateImageWidth = imageWidth;
+    stateImageHeight = imageHeight;
 
     if (initialPoints && initialPoints.length === 4) {
       // Convert image coords to display coords
       points = initialPoints.map(p => ({
-        x: p.x / overlayCanvas._scaleX,
-        y: p.y / overlayCanvas._scaleY
+        x: p.x / stateScaleX,
+        y: p.y / stateScaleY
       }));
     } else {
       // Default: rectangle with 10% margin
@@ -80,8 +84,8 @@
    */
   function getPoints() {
     return points.map(p => ({
-      x: Math.round(p.x * overlayCanvas._scaleX),
-      y: Math.round(p.y * overlayCanvas._scaleY)
+      x: Math.round(p.x * stateScaleX),
+      y: Math.round(p.y * stateScaleY)
     }));
   }
 
