@@ -119,6 +119,12 @@ button {
   color: inherit;
 }
 
+/* Accessible focus ring for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ---------- Scrollbar ---------- */
 ::-webkit-scrollbar {
   width: 6px;
@@ -1045,6 +1051,28 @@ button {
 
 .styled-slider::-webkit-slider-thumb:hover {
   transform: scale(1.2);
+}
+
+/* Firefox slider styles */
+.styled-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.styled-slider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+}
+
+.styled-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-primary);
+  border: 1px solid var(--glass-border);
 }
 
 /* ============================================

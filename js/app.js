@@ -817,8 +817,8 @@ const App = (() => {
       const pageData = {
         originalDataUrl: originalImage.src,
         corners: cornerPoints,
-        warpedDataUrl: warpCanvas.toDataURL('image/png'),
-        dataUrl: dom.canvasOutput.toDataURL('image/png'),
+        warpedDataUrl: warpCanvas.toDataURL('image/jpeg', 0.92),
+        dataUrl: dom.canvasOutput.toDataURL('image/jpeg', 0.92),
         width: dom.canvasOutput.width,
         height: dom.canvasOutput.height,
         filter: targetFilter
@@ -882,7 +882,7 @@ const App = (() => {
         const filtered = Scanner.applyFilter(mat, tab.currentFilter, options);
         Scanner.drawToCanvas(filtered, dom.canvasOutput);
 
-        page.dataUrl = dom.canvasOutput.toDataURL('image/png');
+        page.dataUrl = dom.canvasOutput.toDataURL('image/jpeg', 0.92);
         page.width = dom.canvasOutput.width;
         page.height = dom.canvasOutput.height;
         page.filter = tab.currentFilter;
