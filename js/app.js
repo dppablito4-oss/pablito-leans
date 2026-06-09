@@ -1349,7 +1349,13 @@ const App = (() => {
             await writable.close();
             showToast(`ZIP guardado con éxito`, 'success');
           } catch(e) { 
-            if(e.name !== 'AbortError') showToast('Error al guardar', 'error'); 
+            if(e.name !== 'AbortError') {
+              const link = document.createElement('a');
+              link.download = `pablito-leans-${pagesToExport.length}imagenes-${Date.now()}.zip`;
+              link.href = URL.createObjectURL(zipBlob);
+              link.click();
+              showToast(`ZIP descargado`, 'success');
+            }
           }
         } else {
           const link = document.createElement('a');
@@ -1440,7 +1446,6 @@ const App = (() => {
       }
 
       showToast('Generando PDF, por favor espera...', 'info');
-      await new Promise(r => setTimeout(r, 100));
 
       const { jsPDF } = window.jspdf;
       
@@ -1534,7 +1539,10 @@ const App = (() => {
           await writable.close();
           showToast(`PDF guardado con éxito`, 'success');
         } catch (err) {
-          if (err.name !== 'AbortError') showToast('Error al guardar', 'error');
+          if (err.name !== 'AbortError') {
+            pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
+            showToast(`PDF descargado`, 'success');
+          }
         }
       } else {
         pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
