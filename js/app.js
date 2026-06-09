@@ -1378,6 +1378,15 @@ const App = (() => {
       return;
     }
 
+    if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined' && !isJsPdfLoading) {
+      isJsPdfLoading = true;
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      script.onload = () => { isJsPdfLoading = false; };
+      script.onerror = () => { isJsPdfLoading = false; showToast('Error al cargar la librería PDF', 'error'); };
+      document.head.appendChild(script);
+    }
+
     if (dom.pdfPageRange) dom.pdfPageRange.value = '';
     if (dom.pdfModal) dom.pdfModal.classList.remove('hidden');
   }
@@ -1389,34 +1398,15 @@ const App = (() => {
   let isJsPdfLoading = false;
 
   async function confirmPdfExport() {
-    closePdfModal();
     const tab = currentTab();
     if (tab.scannedPages.length === 0) return;
 
     if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
-      if (isJsPdfLoading) {
-        showToast('Cargando librería PDF, por favor espera...', 'info');
-        return;
-      }
-      isJsPdfLoading = true;
-      showToast('Cargando librería PDF…', 'info');
-      
-      try {
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-          script.onload = resolve;
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-      } catch (err) {
-        isJsPdfLoading = false;
-        showToast('Error al cargar la librería PDF', 'error');
-        return;
-      }
-      isJsPdfLoading = false;
+      showToast('Cargando librería PDF, por favor espera un momento y vuelve a presionar Generar...', 'warning');
+      return;
     }
-
+    
+    closePdfModal();
     generatePdf();
   }
 
