@@ -85,21 +85,39 @@
           </svg>
           <span>Arrastra los puntos para ajustar las esquinas</span>
         </div>
+        <div class="editor-top-row">
+          <span class="page-counter hidden" id="editor-page-counter">1 / 1</span>
+        </div>
         
         <div id="editor-controls" class="controls-panel">
+          <button class="btn btn-secondary btn-icon-only" id="btn-rotate" type="button" title="Rotar 90°">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.26l5.67-3.25"/>
+            </svg>
+          </button>
+          <button class="btn btn-secondary btn-icon-only hidden" id="btn-editor-prev" type="button" title="Página anterior">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <button class="btn btn-secondary btn-icon-only hidden" id="btn-editor-next" type="button" title="Página siguiente">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
           <button class="btn btn-secondary" id="btn-cancel" type="button">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
-            Cancelar
+            <span class="btn-text">Cancelar</span>
           </button>
           <button class="btn btn-primary" id="btn-scan" type="button">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
-            Escanear
+            <span class="btn-text" id="btn-scan-text">Escanear</span>
           </button>
         </div>
       </aside>
@@ -253,6 +271,23 @@
             <label class="radio-label">
               <input type="radio" name="pdf-fit" value="cover">
               <span>Cubrir hoja (Deformar)</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Orientación de Hoja</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="pdf-orientation" value="auto" checked>
+              <span>Automático (Según imagen)</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="pdf-orientation" value="portrait">
+              <span>Forzar Vertical</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="pdf-orientation" value="landscape">
+              <span>Forzar Horizontal</span>
             </label>
           </div>
         </div>

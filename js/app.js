@@ -61,6 +61,10 @@ const App = (() => {
     dom.btnSelectFile = document.getElementById('btn-select-file');
     dom.btnCancel = document.getElementById('btn-cancel');
     dom.btnScan = document.getElementById('btn-scan');
+    dom.btnRotate = document.getElementById('btn-rotate');
+    dom.btnEditorPrev = document.getElementById('btn-editor-prev');
+    dom.btnEditorNext = document.getElementById('btn-editor-next');
+    dom.editorPageCounter = document.getElementById('editor-page-counter');
     dom.btnReadjust = document.getElementById('btn-readjust');
     dom.btnApplyAll = document.getElementById('btn-apply-all');
     dom.btnDownload = document.getElementById('btn-download');
@@ -91,6 +95,7 @@ const App = (() => {
     dom.pdfPageRange = document.getElementById('pdf-page-range');
     dom.pdfPageSize = document.getElementById('pdf-page-size');
     dom.pdfFitOptions = document.querySelectorAll('input[name="pdf-fit"]');
+    dom.pdfOrientationOptions = document.querySelectorAll('input[name="pdf-orientation"]');
 
     // Manual Adjustments
     dom.manualAdjustments = document.getElementById('manual-adjustments');
@@ -161,7 +166,10 @@ const App = (() => {
 
     // Action buttons
     dom.btnCancel.addEventListener('click', handleCancel);
-    dom.btnScan.addEventListener('click', performScan);
+    dom.btnScan.addEventListener('click', () => performScan('result'));
+    dom.btnRotate.addEventListener('click', rotateEditorImage);
+    dom.btnEditorPrev.addEventListener('click', () => navigateEditor(-1));
+    dom.btnEditorNext.addEventListener('click', () => navigateEditor(1));
     dom.btnReadjust.addEventListener('click', startReAdjust);
     dom.btnApplyAll.addEventListener('click', applyFilterToAllPages);
     dom.btnDownload.addEventListener('click', downloadAllImages);
@@ -763,6 +771,55 @@ const App = (() => {
       imgW,
       imgH
     );
+
+    const tab = currentTab();
+    if (tab.isReAdjusting && tab.scannedPages.length > 1) {
+      dom.editorPageCounter.textContent = `${tab.activePageIndex + 1} / ${tab.scannedPages.length}`;
+      dom.editorPageCounter.classList.remove('hidden');
+      dom.btnEditorPrev.classList.toggle('hidden', tab.activePageIndex === 0);
+      dom.btnEditorNext.classList.toggle('hidden', tab.activePageIndex >= tab.scannedPages.length - 1);
+      
+      const scanText = dom.btnScan.querySelector('.btn-text');
+      if (scanText) {
+        scanText.textContent = (tab.activePageIndex === tab.scannedPages.length - 1) ? 'Finalizar' : 'Escanear';
+      }
+    } else {
+      dom.editorPageCounter.classList.add('hidden');
+      dom.btnEditorPrev.classList.add('hidden');
+      dom.btnEditorNext.classList.add('hidden');
+      const scanText = dom.btnScan.querySelector('.btn-text');
+      if (scanText) scanText.textContent = 'Escanear';
+    }
+  }
+
+  function rotateEditorImage() {
+    if (!originalMat) return;
+    
+    const dst = new cv.Mat();
+    cv.rotate(originalMat, dst, cv.ROTATE_90_CLOCKWISE);
+    
+    const rotatedCanvas = document.createElement('canvas');
+    rotatedCanvas.width = dst.cols;
+    rotatedCanvas.height = dst.rows;
+    cv.imshow(rotatedCanvas, dst);
+    
+    const newSrc = rotatedCanvas.toDataURL('image/jpeg', 0.95);
+    
+    const img = new Image();
+    img.onload = () => {
+      originalImage = img;
+      const tab = currentTab();
+      tab.originalImageDataUrl = img.src;
+      // We do not pass predefinedCorners because the image rotated and old points are invalid
+      goToEditor(null);
+    };
+    img.src = newSrc;
+    
+    dst.delete();
+  }
+
+  function navigateEditor(direction) {
+    performScan(direction === 1 ? 'next' : 'prev');
   }
 
   // ======== Re-adjust ========
@@ -790,7 +847,7 @@ const App = (() => {
 
   // ======== Scanning ========
 
-  function performScan() {
+  function performScan(nextAction = 'result') {
     if (!originalMat) {
       showToast('No hay imagen cargada', 'error');
       return;
@@ -840,6 +897,28 @@ const App = (() => {
       Corners.destroy();
       cleanupMats();
       originalImage = null;
+
+      if (nextAction === 'next' || nextAction === 'prev') {
+        let newIndex = tab.activePageIndex;
+        if (nextAction === 'next') newIndex++;
+        if (nextAction === 'prev') newIndex--;
+        
+        if (newIndex >= 0 && newIndex < tab.scannedPages.length) {
+          tab.activePageIndex = newIndex;
+          const nextPage = tab.scannedPages[tab.activePageIndex];
+          if (nextPage.originalDataUrl) {
+            tab.isReAdjusting = true;
+            const img = new Image();
+            img.onload = () => {
+              originalImage = img;
+              tab.originalImageDataUrl = img.src;
+              goToEditor(nextPage.corners);
+            };
+            img.src = nextPage.originalDataUrl;
+            return;
+          }
+        }
+      }
 
       renderPagesStrip();
       renderTabsBar();
@@ -1345,6 +1424,11 @@ const App = (() => {
         dom.pdfFitOptions.forEach(opt => { if (opt.checked) fitMode = opt.value; });
       }
 
+      let orientationMode = 'auto';
+      if (dom.pdfOrientationOptions) {
+        dom.pdfOrientationOptions.forEach(opt => { if (opt.checked) orientationMode = opt.value; });
+      }
+
       let pagesToExport = tab.scannedPages;
       if (rangeStr.trim() !== '') {
         const indices = parsePageRange(rangeStr, tab.scannedPages.length);
@@ -1371,8 +1455,19 @@ const App = (() => {
       
       const formatMm = sizesMm[sizeSelection] || sizesMm['A4'];
 
+      let firstPageLandscape = false;
+      if (pagesToExport.length > 0) {
+         if (orientationMode === 'auto') {
+             firstPageLandscape = pagesToExport[0].width > pagesToExport[0].height;
+         } else if (orientationMode === 'landscape') {
+             firstPageLandscape = true;
+         } else if (orientationMode === 'portrait') {
+             firstPageLandscape = false;
+         }
+      }
+
       const pdf = new jsPDF({
-        orientation: 'portrait',
+        orientation: firstPageLandscape ? 'landscape' : 'portrait',
         unit: 'mm',
         format: formatMm,
         compress: true
@@ -1380,7 +1475,15 @@ const App = (() => {
 
       for (let i = 0; i < pagesToExport.length; i++) {
         const page = pagesToExport[i];
-        const pageLandscape = page.width > page.height;
+        
+        let pageLandscape = false;
+        if (orientationMode === 'auto') {
+           pageLandscape = page.width > page.height;
+        } else if (orientationMode === 'landscape') {
+           pageLandscape = true;
+        } else if (orientationMode === 'portrait') {
+           pageLandscape = false;
+        }
         
         let pdfWidth = formatMm[0];
         let pdfHeight = formatMm[1];
