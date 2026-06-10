@@ -1380,10 +1380,19 @@ const App = (() => {
 
     if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined' && !isJsPdfLoading) {
       isJsPdfLoading = true;
+      const existingScript = document.getElementById('jspdf-script-tag');
+      if (existingScript) {
+        existingScript.remove();
+      }
       const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      script.id = 'jspdf-script-tag';
+      script.src = './jspdf.js';
       script.onload = () => { isJsPdfLoading = false; };
-      script.onerror = () => { isJsPdfLoading = false; showToast('Error al cargar la librería PDF', 'error'); };
+      script.onerror = () => { 
+        isJsPdfLoading = false; 
+        script.remove();
+        showToast('Error al cargar la librería PDF', 'error'); 
+      };
       document.head.appendChild(script);
     }
 

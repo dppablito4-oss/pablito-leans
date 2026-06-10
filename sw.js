@@ -1,6 +1,6 @@
 // IMPORTANT: Bump this version string every time you update static assets.
 // This forces the Service Worker to re-cache all files on the next visit.
-const CACHE_NAME = 'pablito-leans-v2'; // Updated: 2026-06-06
+const CACHE_NAME = 'pablito-leans-v3'; // Updated: 2026-06-09
 
 const STATIC_ASSETS = [
   './',
@@ -9,6 +9,7 @@ const STATIC_ASSETS = [
   './js/app.js',
   './js/scanner.js',
   './js/corners.js',
+  './jspdf.js',
   './assets/favicon.svg',
   './manifest.json'
 ];
