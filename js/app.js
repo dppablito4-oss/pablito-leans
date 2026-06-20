@@ -472,6 +472,15 @@ const App = (() => {
       const fileUrl = URL.createObjectURL(file);
       const loadingTask = pdfjsLib.getDocument(fileUrl);
       const pdf = await loadingTask.promise;
+
+      if (pdf.numPages > 100) {
+        const proceed = window.confirm(`Este archivo PDF contiene ${pdf.numPages} páginas.\n\nProcesar más de 100 páginas en el navegador consume una gran cantidad de memoria RAM y puede hacer que la pestaña se congele o falle.\n\n¿Estás seguro de que deseas continuar con el procesamiento?`);
+        if (!proceed) {
+          URL.revokeObjectURL(fileUrl);
+          showToast('Procesamiento de PDF cancelado para proteger la memoria', 'info');
+          return;
+        }
+      }
       
       for (let i = 1; i <= pdf.numPages; i++) {
         const canvas = document.createElement('canvas');
