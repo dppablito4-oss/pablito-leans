@@ -852,63 +852,153 @@ button {
 }
 
 /* ============================================
-   LOADER OVERLAY
+   LOADER OVERLAY (Futuristic & Premium)
    ============================================ */
 .loader-overlay {
   position: fixed;
   inset: 0;
   z-index: 9999;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-lg);
-  background: var(--bg-primary);
-  transition: opacity var(--transition-slow);
+  background: #030308;
+  transition: opacity var(--transition-slow), visibility var(--transition-slow);
 }
 
 .loader-overlay.hidden {
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
 }
 
-.loader-spinner {
-  width: 56px;
-  height: 56px;
-  border: 3px solid var(--bg-surface-hover);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+/* Glowing backdrops */
+.loader-bg-glow {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.15) 0%, transparent 70%);
+  filter: blur(50px);
+  animation: float-glow 8s ease-in-out infinite;
+  pointer-events: none;
 }
 
-.loader-text {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
+@keyframes float-glow {
+  0%, 100% { transform: translate(-20px, -20px) scale(1); }
+  50% { transform: translate(20px, 20px) scale(1.2); }
+}
+
+.loader-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xl);
+  max-width: 320px;
+  width: 90%;
   text-align: center;
 }
 
-.loader-text strong {
-  display: block;
-  font-size: 1rem;
+/* Scanner Card Animation */
+.scanner-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-sm);
+}
+
+.loader-card {
+  width: 100px;
+  height: 130px;
+  border: 2px solid rgba(0, 212, 255, 0.3);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 212, 255, 0.05);
+  overflow: hidden;
+  backdrop-filter: blur(5px);
+}
+
+/* Pulsing doc lines inside the card */
+.scanner-doc {
+  position: absolute;
+  inset: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  opacity: 0.6;
+  animation: pulse-doc 2s ease-in-out infinite;
+}
+
+.scanner-line {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.scanner-line.line-1 { width: 80%; }
+.scanner-line.line-2 { width: 95%; }
+.scanner-line.line-3 { width: 60%; }
+
+/* Laser Scanner line */
+.scanner-laser {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 5%, var(--accent) 50%, transparent 95%);
+  box-shadow: 0 0 12px var(--accent), 0 0 4px var(--accent);
+  animation: scan-laser 3s ease-in-out infinite;
+  z-index: 3;
+}
+
+@keyframes scan-laser {
+  0%, 100% { top: 0%; opacity: 0; }
+  5%, 95% { opacity: 1; }
+  50% { top: 100%; }
+}
+
+@keyframes pulse-doc {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* Loader Text */
+.loader-text h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
   color: var(--text-primary);
   margin-bottom: var(--space-xs);
+  letter-spacing: -0.01em;
+  background: linear-gradient(90deg, #F0F0F5, #ffffff, #F0F0F5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.loader-text p {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
 }
 
 /* Progress bar for loader */
 .loader-progress {
-  width: 200px;
-  height: 4px;
-  background: var(--bg-surface);
+  width: 180px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-full);
   overflow: hidden;
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
 }
 
 .loader-progress__bar {
   height: 100%;
   background: var(--accent-gradient);
   border-radius: var(--radius-full);
-  width: 30%;
-  animation: loader-progress 2s ease-in-out infinite;
+  width: 40%;
+  box-shadow: 0 0 10px var(--accent-glow);
+  animation: loader-progress 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 /* ============================================

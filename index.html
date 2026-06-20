@@ -226,13 +226,25 @@
 
   <!-- ============ LOADER OVERLAY ============ -->
   <div class="loader-overlay" id="opencv-loader">
-    <div class="loader-spinner"></div>
-    <div class="loader-text">
-      <strong>Cargando motor de visión</strong>
-      Preparando OpenCV.js…
-    </div>
-    <div class="loader-progress">
-      <div class="loader-progress__bar"></div>
+    <div class="loader-bg-glow"></div>
+    <div class="loader-content">
+      <div class="scanner-container">
+        <div class="loader-card">
+          <div class="scanner-laser"></div>
+          <div class="scanner-doc">
+            <div class="scanner-line line-1"></div>
+            <div class="scanner-line line-2"></div>
+            <div class="scanner-line line-3"></div>
+          </div>
+        </div>
+      </div>
+      <div class="loader-text">
+        <h2>Cargando motor de visión</h2>
+        <p>Preparando OpenCV.js asíncronamente para escaneo local…</p>
+      </div>
+      <div class="loader-progress">
+        <div class="loader-progress__bar"></div>
+      </div>
     </div>
   </div>
 
