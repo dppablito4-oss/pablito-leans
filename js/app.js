@@ -87,15 +87,21 @@ const App = (() => {
     dom.tabsList = document.getElementById('tabs-list');
     dom.btnAddTab = document.getElementById('btn-add-tab');
     
-    // PDF Modal
-    dom.pdfModal = document.getElementById('pdf-modal-overlay');
-    dom.btnPdfClose = document.getElementById('pdf-modal-close');
-    dom.btnPdfCancel = document.getElementById('pdf-modal-cancel');
-    dom.btnPdfConfirm = document.getElementById('pdf-modal-confirm');
-    dom.pdfPageRange = document.getElementById('pdf-page-range');
-    dom.pdfPageSize = document.getElementById('pdf-page-size');
-    dom.pdfFitOptions = document.querySelectorAll('input[name="pdf-fit"]');
-    dom.pdfOrientationOptions = document.querySelectorAll('input[name="pdf-orientation"]');
+    // Export Modal
+    dom.exportModal = document.getElementById('export-modal-overlay');
+    dom.btnExportClose = document.getElementById('export-modal-close');
+    dom.btnExportCancel = document.getElementById('export-modal-cancel');
+    dom.btnExportConfirm = document.getElementById('export-modal-confirm');
+    dom.exportPageRange = document.getElementById('export-page-range');
+    dom.exportPageSize = document.getElementById('export-page-size');
+    dom.exportFitOptions = document.querySelectorAll('input[name="export-fit"]');
+    dom.exportOrientationOptions = document.querySelectorAll('input[name="export-orientation"]');
+    dom.exportFormatOptions = document.querySelectorAll('input[name="export-format"]');
+    dom.exportImageMethodOptions = document.querySelectorAll('input[name="export-image-method"]');
+    dom.groupPageSize = document.getElementById('group-page-size');
+    dom.groupImageFit = document.getElementById('group-image-fit');
+    dom.groupOrientation = document.getElementById('group-orientation');
+    dom.groupImageMethod = document.getElementById('group-image-method');
 
     // Manual Adjustments
     dom.manualAdjustments = document.getElementById('manual-adjustments');
@@ -121,6 +127,9 @@ const App = (() => {
     tabs.push(createTabData());
     activeTabIndex = 0;
     renderTabsBar();
+
+    // Preload PDF library
+    loadJsPdfLib();
 
     if (window._opencvReady || (typeof cv !== 'undefined' && cv.Mat)) {
       onOpenCvReady();
@@ -172,15 +181,22 @@ const App = (() => {
     dom.btnEditorNext.addEventListener('click', () => navigateEditor(1));
     dom.btnReadjust.addEventListener('click', startReAdjust);
     dom.btnApplyAll.addEventListener('click', applyFilterToAllPages);
-    dom.btnDownload.addEventListener('click', downloadAllImages);
-    dom.btnDownloadPdf.addEventListener('click', downloadPdf);
+    dom.btnDownload.addEventListener('click', () => openExportModal('images'));
+    dom.btnDownloadPdf.addEventListener('click', () => openExportModal('pdf'));
     dom.btnAddPage.addEventListener('click', addAnotherPage);
     dom.btnDeletePage.addEventListener('click', deleteActivePage);
 
-    // PDF Modal
-    if (dom.btnPdfClose) dom.btnPdfClose.addEventListener('click', closePdfModal);
-    if (dom.btnPdfCancel) dom.btnPdfCancel.addEventListener('click', closePdfModal);
-    if (dom.btnPdfConfirm) dom.btnPdfConfirm.addEventListener('click', confirmPdfExport);
+    // Export Modal
+    if (dom.btnExportClose) dom.btnExportClose.addEventListener('click', closeExportModal);
+    if (dom.btnExportCancel) dom.btnExportCancel.addEventListener('click', closeExportModal);
+    if (dom.btnExportConfirm) dom.btnExportConfirm.addEventListener('click', confirmExport);
+
+    dom.exportFormatOptions.forEach(opt => {
+      opt.addEventListener('change', updateExportModalUi);
+    });
+    if (dom.exportPageSize) {
+      dom.exportPageSize.addEventListener('change', updateExportModalUi);
+    }
 
     // Tab controls
     dom.btnAddTab.addEventListener('click', addNewTab);
@@ -458,57 +474,68 @@ const App = (() => {
       const pdf = await loadingTask.promise;
       
       for (let i = 1; i <= pdf.numPages; i++) {
-        showToast(`Procesando página ${i}/${pdf.numPages} del PDF...`, 'info');
-        const page = await pdf.getPage(i);
-        
-        const initialViewport = page.getViewport({ scale: 1.0 });
-        const maxDim = Math.max(initialViewport.width, initialViewport.height);
-        let scale = 1.0;
-        if (maxDim > 2500) {
-          scale = 2500 / maxDim;
-        } else if (maxDim < 1000) {
-          scale = 2.0;
-        }
-        const viewport = page.getViewport({ scale });
         const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        
-        await page.render({
-          canvasContext: context,
-          viewport: viewport
-        }).promise;
-        
-        let mat = null;
-        let filtered = null;
+        const outCanvas = document.createElement('canvas');
         try {
-          mat = cv.imread(canvas);
-          filtered = Scanner.applyFilter(mat, 'color');
+          showToast(`Procesando página ${i}/${pdf.numPages} del PDF...`, 'info');
+          const page = await pdf.getPage(i);
           
-          const outCanvas = document.createElement('canvas');
-          Scanner.drawToCanvas(filtered, outCanvas);
+          const initialViewport = page.getViewport({ scale: 1.0 });
+          const maxDim = Math.max(initialViewport.width, initialViewport.height);
+          let scale = 1.0;
+          if (maxDim > 2500) {
+            scale = 2500 / maxDim;
+          } else if (maxDim < 1000) {
+            scale = 2.0;
+          }
+          const viewport = page.getViewport({ scale });
+          const context = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
           
-          const corners = [
-            {x: 0, y: 0},
-            {x: canvas.width, y: 0},
-            {x: canvas.width, y: canvas.height},
-            {x: 0, y: canvas.height}
-          ];
+          await page.render({
+            canvasContext: context,
+            viewport: viewport
+          }).promise;
           
-          tab.scannedPages.push({
-            originalDataUrl: canvas.toDataURL('image/jpeg', 0.9),
-            corners: corners,
-            warpedDataUrl: canvas.toDataURL('image/jpeg', 0.9),
-            dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
-            width: outCanvas.width,
-            height: outCanvas.height,
-            filter: 'color',
-            isPdf: true
-          });
+          let mat = null;
+          let filtered = null;
+          try {
+            mat = cv.imread(canvas);
+            filtered = Scanner.applyFilter(mat, 'color');
+            
+            Scanner.drawToCanvas(filtered, outCanvas);
+            
+            const corners = [
+              {x: 0, y: 0},
+              {x: canvas.width, y: 0},
+              {x: canvas.width, y: canvas.height},
+              {x: 0, y: canvas.height}
+            ];
+            
+            tab.scannedPages.push({
+              originalDataUrl: canvas.toDataURL('image/jpeg', 0.9),
+              corners: corners,
+              warpedDataUrl: canvas.toDataURL('image/jpeg', 0.9),
+              dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
+              width: outCanvas.width,
+              height: outCanvas.height,
+              filter: 'color',
+              isPdf: true
+            });
+          } finally {
+            if (mat) mat.delete();
+            if (filtered) filtered.delete();
+          }
+        } catch (pageError) {
+          console.error(`[App] Error processing PDF page ${i}:`, pageError);
+          showToast(`Error en página ${i}: ${pageError.message || pageError}`, 'warning');
         } finally {
-          if (mat) mat.delete();
-          if (filtered) filtered.delete();
+          // Release canvas memory immediately
+          canvas.width = 0;
+          canvas.height = 0;
+          outCanvas.width = 0;
+          outCanvas.height = 0;
         }
       }
       URL.revokeObjectURL(fileUrl);
@@ -519,11 +546,12 @@ const App = (() => {
         renderPagesStrip();
         updatePageCounter();
         renderTabsBar();
+        showActivePage();
         setState('result');
       }
     } catch (error) {
       console.error('[App] Error processing PDF:', error);
-      showToast('Error al procesar el archivo PDF', 'error');
+      showToast(`Error al procesar el archivo PDF: ${error.message || error}`, 'error');
     }
   }
 
@@ -538,6 +566,7 @@ const App = (() => {
       renderPagesStrip();
       updatePageCounter();
       renderTabsBar();
+      showActivePage();
       setState('result');
       return;
     }
@@ -1249,7 +1278,28 @@ const App = (() => {
     document.getElementById('filter-color').classList.add('active');
   }
 
-  // ======== Download ========
+    // ======== Export & Download ========
+
+  let isJsPdfLoading = false;
+
+  function loadJsPdfLib() {
+    if (typeof jspdf !== 'undefined' || typeof window.jspdf !== 'undefined' || isJsPdfLoading) return;
+    isJsPdfLoading = true;
+    const existingScript = document.getElementById('jspdf-script-tag');
+    if (existingScript) {
+      existingScript.remove();
+    }
+    const script = document.createElement('script');
+    script.id = 'jspdf-script-tag';
+    script.src = './jspdf.js';
+    script.onload = () => { isJsPdfLoading = false; };
+    script.onerror = () => { 
+      isJsPdfLoading = false; 
+      script.remove();
+      showToast('Error al cargar la librería PDF', 'error'); 
+    };
+    document.head.appendChild(script);
+  }
 
   function parsePageRange(rangeStr, maxPages) {
     if (!rangeStr || rangeStr.trim() === '') {
@@ -1276,64 +1326,390 @@ const App = (() => {
     return Array.from(pages).sort((a, b) => a - b);
   }
 
-  async function downloadAllImages() {
+  function openExportModal(defaultFormat) {
     const tab = currentTab();
     if (tab.scannedPages.length === 0) {
-      showToast('No hay páginas para descargar', 'warning');
+      showToast('No hay páginas para exportar', 'warning');
       return;
     }
+    
+    // Set format radio button
+    dom.exportFormatOptions.forEach(opt => {
+      opt.checked = (opt.value === defaultFormat);
+    });
 
-    let pagesToExport = tab.scannedPages;
-    if (tab.scannedPages.length > 1) {
-      const rangeStr = window.prompt(`¿Qué páginas deseas descargar?\nIngresa el rango (1 a ${tab.scannedPages.length}) o deja en blanco para TODAS.\nEjemplo: 1-3, 5`, "");
-      if (rangeStr === null) return; // Cancelado
-      const indices = parsePageRange(rangeStr, tab.scannedPages.length);
-      if (indices.length === 0) {
-        showToast('Rango de páginas no válido', 'error');
-        return;
-      }
-      pagesToExport = indices.map(i => tab.scannedPages[i]);
+    if (dom.exportPageRange) dom.exportPageRange.value = '';
+    
+    // Show modal
+    dom.exportModal.classList.remove('hidden');
+    updateExportModalUi();
+  }
+
+  function closeExportModal() {
+    dom.exportModal.classList.add('hidden');
+  }
+
+  function updateExportModalUi() {
+    let format = 'pdf';
+    dom.exportFormatOptions.forEach(opt => { if (opt.checked) format = opt.value; });
+
+    const pageSize = dom.exportPageSize ? dom.exportPageSize.value : 'A4';
+    const isOriginal = pageSize === 'original';
+
+    // Show/hide groups
+    if (format === 'pdf') {
+      dom.groupImageMethod.classList.add('hidden');
+    } else {
+      dom.groupImageMethod.classList.remove('hidden');
     }
 
+    if (isOriginal) {
+      dom.groupImageFit.classList.add('hidden');
+      dom.groupOrientation.classList.add('hidden');
+    } else {
+      dom.groupImageFit.classList.remove('hidden');
+      dom.groupOrientation.classList.remove('hidden');
+    }
+
+    const confirmText = document.getElementById('export-confirm-text');
+    if (confirmText) {
+      confirmText.textContent = format === 'pdf' ? 'Generar PDF' : 'Descargar';
+    }
+  }
+
+  async function confirmExport() {
+    const tab = currentTab();
+    if (tab.scannedPages.length === 0) return;
+
+    let format = 'pdf';
+    dom.exportFormatOptions.forEach(opt => { if (opt.checked) format = opt.value; });
+
+    closeExportModal();
+
+    if (format === 'pdf') {
+      if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+        showToast('Cargando librería PDF, por favor espera un momento y vuelve a exportar...', 'warning');
+        loadJsPdfLib();
+        return;
+      }
+      generatePdf();
+    } else {
+      generateImages();
+    }
+  }
+
+  async function generatePdf() {
+    const tab = currentTab();
     try {
-      if (pagesToExport.length === 1) {
-        const page = pagesToExport[0];
-        const res = await fetch(page.dataUrl);
-        const blob = await res.blob();
-        if (window.showSaveFilePicker) {
-          try {
-            const handle = await window.showSaveFilePicker({
-              suggestedName: `pablito-leans-pag-${Date.now()}.jpg`,
-              types: [{ description: 'Imagen JPEG', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } }]
-            });
-            const writable = await handle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-            showToast('Imagen guardada con éxito', 'success');
-          } catch(e) { 
-            if(e.name !== 'AbortError') showToast('Error al guardar', 'error'); 
+      const rangeStr = dom.exportPageRange ? dom.exportPageRange.value : '';
+      const sizeSelection = dom.exportPageSize ? dom.exportPageSize.value : 'A4';
+      
+      let fitMode = 'contain';
+      dom.exportFitOptions.forEach(opt => { if (opt.checked) fitMode = opt.value; });
+
+      let orientationMode = 'auto';
+      dom.exportOrientationOptions.forEach(opt => { if (opt.checked) orientationMode = opt.value; });
+
+      let pagesToExport = tab.scannedPages;
+      if (rangeStr.trim() !== '') {
+        const indices = parsePageRange(rangeStr, tab.scannedPages.length);
+        if (indices.length === 0) {
+          showToast('Rango de páginas no válido', 'error');
+          return;
+        }
+        pagesToExport = indices.map(i => tab.scannedPages[i]);
+      }
+
+      showToast('Generando PDF, por favor espera...', 'info');
+
+      const { jsPDF } = window.jspdf;
+      
+      const sizesMm = {
+        'A0': [841, 1189],
+        'A1': [594, 841],
+        'A2': [420, 594],
+        'A3': [297, 420],
+        'A4': [210, 297],
+        'A5': [148, 210]
+      };
+      
+      let firstPageWidthMm;
+      let firstPageHeightMm;
+      let firstPageLandscape = false;
+      
+      if (sizeSelection === 'original') {
+        firstPageWidthMm = pagesToExport[0].width * 25.4 / 150;
+        firstPageHeightMm = pagesToExport[0].height * 25.4 / 150;
+        firstPageLandscape = firstPageWidthMm > firstPageHeightMm;
+      } else {
+        const formatMm = sizesMm[sizeSelection] || sizesMm['A4'];
+        firstPageWidthMm = formatMm[0];
+        firstPageHeightMm = formatMm[1];
+        if (orientationMode === 'auto') {
+          firstPageLandscape = pagesToExport[0].width > pagesToExport[0].height;
+        } else if (orientationMode === 'landscape') {
+          firstPageLandscape = true;
+        } else if (orientationMode === 'portrait') {
+          firstPageLandscape = false;
+        }
+        if (firstPageLandscape) {
+          firstPageWidthMm = formatMm[1];
+          firstPageHeightMm = formatMm[0];
+        }
+      }
+
+      const pdf = new jsPDF({
+        orientation: firstPageLandscape ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: sizeSelection === 'original' ? [firstPageWidthMm, firstPageHeightMm] : (sizesMm[sizeSelection] || sizesMm['A4']),
+        compress: true
+      });
+
+      for (let i = 0; i < pagesToExport.length; i++) {
+        const page = pagesToExport[i];
+        
+        let pdfWidth;
+        let pdfHeight;
+        let pageLandscape = false;
+
+        if (sizeSelection === 'original') {
+          pdfWidth = page.width * 25.4 / 150;
+          pdfHeight = page.height * 25.4 / 150;
+          pageLandscape = pdfWidth > pdfHeight;
+          if (i > 0) {
+            pdf.addPage([pdfWidth, pdfHeight], pageLandscape ? 'landscape' : 'portrait');
           }
+          pdf.addImage(page.dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
         } else {
-          const link = document.createElement('a');
-          link.download = `pablito-leans-pag-${Date.now()}.jpg`;
-          link.href = page.dataUrl;
-          link.click();
-          showToast('Imagen descargada', 'success');
+          const formatMm = sizesMm[sizeSelection] || sizesMm['A4'];
+          if (orientationMode === 'auto') {
+             pageLandscape = page.width > page.height;
+          } else if (orientationMode === 'landscape') {
+             pageLandscape = true;
+          } else if (orientationMode === 'portrait') {
+             pageLandscape = false;
+          }
+          
+          pdfWidth = formatMm[0];
+          pdfHeight = formatMm[1];
+          
+          if (pageLandscape) {
+             pdfWidth = formatMm[1];
+             pdfHeight = formatMm[0];
+          }
+
+          if (i > 0) {
+            pdf.addPage([formatMm[0], formatMm[1]], pageLandscape ? 'landscape' : 'portrait');
+          }
+
+          if (fitMode === 'cover') {
+             pdf.addImage(page.dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+          } else {
+             const imgRatio = page.width / page.height;
+             const pdfRatio = pdfWidth / pdfHeight;
+             
+             let finalW = pdfWidth;
+             let finalH = pdfHeight;
+             let x = 0;
+             let y = 0;
+
+             if (imgRatio > pdfRatio) {
+               finalW = pdfWidth;
+               finalH = pdfWidth / imgRatio;
+               y = (pdfHeight - finalH) / 2;
+             } else {
+               finalH = pdfHeight;
+               finalW = pdfHeight * imgRatio;
+               x = (pdfWidth - finalW) / 2;
+             }
+             
+             pdf.addImage(page.dataUrl, 'JPEG', x, y, finalW, finalH, undefined, 'FAST');
+          }
+        }
+      }
+
+      if (window.showSaveFilePicker) {
+        try {
+          const pdfBlob = pdf.output('blob');
+          const handle = await window.showSaveFilePicker({
+            suggestedName: `pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`,
+            types: [{ description: 'Documento PDF', accept: { 'application/pdf': ['.pdf'] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(pdfBlob);
+          await writable.close();
+          showToast(`PDF guardado con éxito`, 'success');
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
+            showToast(`PDF descargado`, 'success');
+          }
         }
       } else {
+        pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
+        showToast(`PDF descargado`, 'success');
+      }
+    } catch (err) {
+      console.error('[App] PDF generation error:', err);
+      showToast('Error al generar PDF.', 'error');
+    }
+  }
+
+  async function generateImages() {
+    const tab = currentTab();
+    try {
+      const rangeStr = dom.exportPageRange ? dom.exportPageRange.value : '';
+      const sizeSelection = dom.exportPageSize ? dom.exportPageSize.value : 'A4';
+      
+      let fitMode = 'contain';
+      dom.exportFitOptions.forEach(opt => { if (opt.checked) fitMode = opt.value; });
+
+      let orientationMode = 'auto';
+      dom.exportOrientationOptions.forEach(opt => { if (opt.checked) orientationMode = opt.value; });
+
+      let imageMethod = 'zip';
+      dom.exportImageMethodOptions.forEach(opt => { if (opt.checked) imageMethod = opt.value; });
+
+      let pagesToExport = tab.scannedPages;
+      if (rangeStr.trim() !== '') {
+        const indices = parsePageRange(rangeStr, tab.scannedPages.length);
+        if (indices.length === 0) {
+          showToast('Rango de páginas no válido', 'error');
+          return;
+        }
+        pagesToExport = indices.map(i => tab.scannedPages[i]);
+      }
+
+      showToast('Generando imágenes, por favor espera...', 'info');
+
+      // Helper to draw a single page to canvas and get dataUrl
+      const processPageImage = async (page) => {
+        if (sizeSelection === 'original') {
+          return page.dataUrl; // Return original data url
+        }
+
+        const sizesPx = {
+          'A0': [4960, 7016],
+          'A1': [3508, 4960],
+          'A2': [2480, 3508],
+          'A3': [1754, 2480],
+          'A4': [1240, 1754],
+          'A5': [874, 1240]
+        };
+        const formatPx = sizesPx[sizeSelection] || sizesPx['A4'];
+        
+        let pageLandscape = false;
+        if (orientationMode === 'auto') {
+          pageLandscape = page.width > page.height;
+        } else if (orientationMode === 'landscape') {
+          pageLandscape = true;
+        } else if (orientationMode === 'portrait') {
+          pageLandscape = false;
+        }
+
+        let targetWidth = formatPx[0];
+        let targetHeight = formatPx[1];
+        if (pageLandscape) {
+          targetWidth = formatPx[1];
+          targetHeight = formatPx[0];
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+
+        // White background
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            if (fitMode === 'cover') {
+              ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+            } else {
+              const imgRatio = page.width / page.height;
+              const targetRatio = targetWidth / targetHeight;
+              
+              let finalW = targetWidth;
+              let finalH = targetHeight;
+              let x = 0;
+              let y = 0;
+
+              if (imgRatio > targetRatio) {
+                finalW = targetWidth;
+                finalH = targetWidth / imgRatio;
+                y = (targetHeight - finalH) / 2;
+              } else {
+                finalH = targetHeight;
+                finalW = targetHeight * imgRatio;
+                x = (targetWidth - finalW) / 2;
+              }
+              ctx.drawImage(img, x, y, finalW, finalH);
+            }
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            // Clear canvas memory
+            canvas.width = 0;
+            canvas.height = 0;
+            resolve(dataUrl);
+          };
+          img.src = page.dataUrl;
+        });
+      };
+
+      if (imageMethod === 'individual') {
+        // Individual downloads
+        for (let i = 0; i < pagesToExport.length; i++) {
+          const page = pagesToExport[i];
+          const dataUrl = await processPageImage(page);
+          const res = await fetch(dataUrl);
+          const blob = await res.blob();
+
+          if (window.showSaveFilePicker) {
+            try {
+              const handle = await window.showSaveFilePicker({
+                suggestedName: `pablito-leans-pag-${i + 1}-${Date.now()}.jpg`,
+                types: [{ description: 'Imagen JPEG', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } }]
+              });
+              const writable = await handle.createWritable();
+              await writable.write(blob);
+              await writable.close();
+            } catch(e) { 
+              if(e.name !== 'AbortError') {
+                // Fallback to standard link download
+                const link = document.createElement('a');
+                link.download = `pablito-leans-pag-${i + 1}-${Date.now()}.jpg`;
+                link.href = dataUrl;
+                link.click();
+              } 
+            }
+          } else {
+            const link = document.createElement('a');
+            link.download = `pablito-leans-pag-${i + 1}-${Date.now()}.jpg`;
+            link.href = dataUrl;
+            link.click();
+          }
+          // Slight delay to avoid browser blocking multiple downloads
+          if (pagesToExport.length > 1) {
+            await new Promise(r => setTimeout(r, 600));
+          }
+        }
+        showToast('Descarga completada', 'success');
+      } else {
+        // ZIP download
         if (typeof JSZip === 'undefined') {
           showToast('Error: Librería JSZip no cargada', 'error');
           return;
         }
         showToast('Comprimiendo imágenes en ZIP...', 'info');
-        
-        // Pequeña pausa para permitir que el UI se actualice
         await new Promise(r => setTimeout(r, 100));
 
         const zip = new JSZip();
         for (let i = 0; i < pagesToExport.length; i++) {
           const page = pagesToExport[i];
-          const base64Data = page.dataUrl.split(',')[1];
+          const dataUrl = await processPageImage(page);
+          const base64Data = dataUrl.split(',')[1];
           zip.file(`pagina_${i + 1}.jpg`, base64Data, { base64: true });
         }
         
@@ -1366,190 +1742,8 @@ const App = (() => {
         }
       }
     } catch (err) {
-      console.error(err);
-      showToast('Error al descargar imágenes', 'error');
-    }
-  }
-
-  function downloadPdf() {
-    const tab = currentTab();
-    if (tab.scannedPages.length === 0) {
-      showToast('No hay páginas para exportar', 'warning');
-      return;
-    }
-
-    if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined' && !isJsPdfLoading) {
-      isJsPdfLoading = true;
-      const existingScript = document.getElementById('jspdf-script-tag');
-      if (existingScript) {
-        existingScript.remove();
-      }
-      const script = document.createElement('script');
-      script.id = 'jspdf-script-tag';
-      script.src = './jspdf.js';
-      script.onload = () => { isJsPdfLoading = false; };
-      script.onerror = () => { 
-        isJsPdfLoading = false; 
-        script.remove();
-        showToast('Error al cargar la librería PDF', 'error'); 
-      };
-      document.head.appendChild(script);
-    }
-
-    if (dom.pdfPageRange) dom.pdfPageRange.value = '';
-    if (dom.pdfModal) dom.pdfModal.classList.remove('hidden');
-  }
-
-  function closePdfModal() {
-    if (dom.pdfModal) dom.pdfModal.classList.add('hidden');
-  }
-
-  let isJsPdfLoading = false;
-
-  async function confirmPdfExport() {
-    const tab = currentTab();
-    if (tab.scannedPages.length === 0) return;
-
-    if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
-      showToast('Cargando librería PDF, por favor espera un momento y vuelve a presionar Generar...', 'warning');
-      return;
-    }
-    
-    closePdfModal();
-    generatePdf();
-  }
-
-  async function generatePdf() {
-    const tab = currentTab();
-    try {
-      const rangeStr = dom.pdfPageRange ? dom.pdfPageRange.value : '';
-      const sizeSelection = dom.pdfPageSize ? dom.pdfPageSize.value : 'A4';
-      let fitMode = 'contain';
-      if (dom.pdfFitOptions) {
-        dom.pdfFitOptions.forEach(opt => { if (opt.checked) fitMode = opt.value; });
-      }
-
-      let orientationMode = 'auto';
-      if (dom.pdfOrientationOptions) {
-        dom.pdfOrientationOptions.forEach(opt => { if (opt.checked) orientationMode = opt.value; });
-      }
-
-      let pagesToExport = tab.scannedPages;
-      if (rangeStr.trim() !== '') {
-        const indices = parsePageRange(rangeStr, tab.scannedPages.length);
-        if (indices.length === 0) {
-          showToast('Rango de páginas no válido', 'error');
-          return;
-        }
-        pagesToExport = indices.map(i => tab.scannedPages[i]);
-      }
-
-      showToast('Generando PDF, por favor espera...', 'info');
-
-      const { jsPDF } = window.jspdf;
-      
-      const sizesMm = {
-        'A0': [841, 1189],
-        'A1': [594, 841],
-        'A2': [420, 594],
-        'A3': [297, 420],
-        'A4': [210, 297],
-        'A5': [148, 210]
-      };
-      
-      const formatMm = sizesMm[sizeSelection] || sizesMm['A4'];
-
-      let firstPageLandscape = false;
-      if (pagesToExport.length > 0) {
-         if (orientationMode === 'auto') {
-             firstPageLandscape = pagesToExport[0].width > pagesToExport[0].height;
-         } else if (orientationMode === 'landscape') {
-             firstPageLandscape = true;
-         } else if (orientationMode === 'portrait') {
-             firstPageLandscape = false;
-         }
-      }
-
-      const pdf = new jsPDF({
-        orientation: firstPageLandscape ? 'landscape' : 'portrait',
-        unit: 'mm',
-        format: formatMm,
-        compress: true
-      });
-
-      for (let i = 0; i < pagesToExport.length; i++) {
-        const page = pagesToExport[i];
-        
-        let pageLandscape = false;
-        if (orientationMode === 'auto') {
-           pageLandscape = page.width > page.height;
-        } else if (orientationMode === 'landscape') {
-           pageLandscape = true;
-        } else if (orientationMode === 'portrait') {
-           pageLandscape = false;
-        }
-        
-        let pdfWidth = formatMm[0];
-        let pdfHeight = formatMm[1];
-        
-        if (pageLandscape) {
-           pdfWidth = formatMm[1];
-           pdfHeight = formatMm[0];
-        }
-
-        if (i > 0) {
-          pdf.addPage([formatMm[0], formatMm[1]], pageLandscape ? 'landscape' : 'portrait');
-        }
-
-        if (fitMode === 'cover') {
-           pdf.addImage(page.dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-        } else {
-           const imgRatio = page.width / page.height;
-           const pdfRatio = pdfWidth / pdfHeight;
-           
-           let finalW = pdfWidth;
-           let finalH = pdfHeight;
-           let x = 0;
-           let y = 0;
-
-           if (imgRatio > pdfRatio) {
-             finalW = pdfWidth;
-             finalH = pdfWidth / imgRatio;
-             y = (pdfHeight - finalH) / 2;
-           } else {
-             finalH = pdfHeight;
-             finalW = pdfHeight * imgRatio;
-             x = (pdfWidth - finalW) / 2;
-           }
-           
-           pdf.addImage(page.dataUrl, 'JPEG', x, y, finalW, finalH, undefined, 'FAST');
-        }
-      }
-
-      if (window.showSaveFilePicker) {
-        try {
-          const pdfBlob = pdf.output('blob');
-          const handle = await window.showSaveFilePicker({
-            suggestedName: `pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`,
-            types: [{ description: 'Documento PDF', accept: { 'application/pdf': ['.pdf'] } }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(pdfBlob);
-          await writable.close();
-          showToast(`PDF guardado con éxito`, 'success');
-        } catch (err) {
-          if (err.name !== 'AbortError') {
-            pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
-            showToast(`PDF descargado`, 'success');
-          }
-        }
-      } else {
-        pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
-        showToast(`PDF descargado`, 'success');
-      }
-    } catch (err) {
-      console.error('[App] PDF generation error:', err);
-      showToast('Error al generar PDF.', 'error');
+      console.error('[App] Image generation error:', err);
+      showToast('Error al generar imágenes.', 'error');
     }
   }
 

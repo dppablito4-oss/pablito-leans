@@ -1463,15 +1463,25 @@ button {
   gap: var(--space-sm);
 }
 
+.radio-group-horizontal {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+}
+
 @media (max-width: 480px) {
   .modal-dialog {
-    margin-top: auto;
-    margin-bottom: 0;
-    width: 100%;
-    max-width: none;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    margin-top: initial;
+    margin-bottom: initial;
+    width: 92%;
+    max-width: 420px;
+    border-radius: var(--radius-md);
   }
   .modal-overlay.hidden .modal-dialog {
-    transform: translateY(100%);
+    transform: translateY(20px) scale(0.95);
   }
 }
