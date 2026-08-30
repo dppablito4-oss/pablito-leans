@@ -1915,6 +1915,12 @@ button:disabled {
   }
 }
 
+.slider-group output {
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .pages-strip__toolbar {
   display: flex;
   align-items: center;

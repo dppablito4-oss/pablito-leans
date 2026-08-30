@@ -42,6 +42,7 @@ const App = (() => {
   let cameraStream = null;
   let cameraFacingMode = 'environment';
   let cameraTorchEnabled = false;
+  let manualFilterTimer = null;
 
   function createTabData(name) {
     return {
@@ -174,6 +175,8 @@ const App = (() => {
     dom.manualAdjustments = document.getElementById('manual-adjustments');
     dom.adjBgClean = document.getElementById('adj-bg-clean');
     dom.adjSaturation = document.getElementById('adj-saturation');
+    dom.adjBgCleanValue = document.getElementById('adj-bg-clean-value');
+    dom.adjSaturationValue = document.getElementById('adj-saturation-value');
   }
 
   // ======== Initialization ========
@@ -309,6 +312,10 @@ const App = (() => {
         const tab = currentTab();
         const filter = btn.dataset.filter;
         if (filter === tab.currentFilter) return;
+        if (filter === 'manual') {
+          const page = tab.scannedPages[tab.activePageIndex];
+          setManualControlValues(page?.manualOptions || { bgClean: 0, saturation: 50 });
+        }
         tab.currentFilter = filter;
         dom.filterBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -318,11 +325,42 @@ const App = (() => {
 
     // Sliders
     if (dom.adjBgClean) {
-      dom.adjBgClean.addEventListener('change', reapplyFilterToActivePage);
+      dom.adjBgClean.addEventListener('input', scheduleManualFilter);
     }
     if (dom.adjSaturation) {
-      dom.adjSaturation.addEventListener('change', reapplyFilterToActivePage);
+      dom.adjSaturation.addEventListener('input', scheduleManualFilter);
     }
+    updateManualControlLabels();
+  }
+
+  function setManualControlValues(options) {
+    if (dom.adjBgClean) dom.adjBgClean.value = options.bgClean ?? 0;
+    if (dom.adjSaturation) dom.adjSaturation.value = options.saturation ?? 50;
+    updateManualControlLabels();
+  }
+
+  function updateManualControlLabels() {
+    const background = Number.parseInt(dom.adjBgClean?.value || '0', 10);
+    const saturation = Number.parseInt(dom.adjSaturation?.value || '50', 10);
+    if (dom.adjBgCleanValue) dom.adjBgCleanValue.textContent = `${background}%`;
+    if (dom.adjSaturationValue) {
+      const delta = Math.round((saturation - 50) / 2);
+      dom.adjSaturationValue.textContent = delta === 0 ? 'Natural' : `${delta > 0 ? '+' : ''}${delta}%`;
+    }
+  }
+
+  function scheduleManualFilter() {
+    updateManualControlLabels();
+    clearTimeout(manualFilterTimer);
+    const tab = currentTab();
+    const tabId = tab.id;
+    const pageIndex = tab.activePageIndex;
+    manualFilterTimer = setTimeout(() => {
+      if (currentTab().id === tabId && currentTab().activePageIndex === pageIndex &&
+          currentTab().currentFilter === 'manual') {
+        reapplyFilterToActivePage();
+      }
+    }, 100);
   }
 
   // ======== Manual Camera ========
@@ -1477,8 +1515,8 @@ const App = (() => {
     const filter = tab.currentFilter;
     const revision = ++tab.filterRevision;
     const options = filter === 'manual' ? {
-      bgClean: dom.adjBgClean ? Number.parseInt(dom.adjBgClean.value, 10) : 50,
-      saturation: dom.adjSaturation ? Number.parseInt(dom.adjSaturation.value, 10) : 100
+      bgClean: dom.adjBgClean ? Number.parseInt(dom.adjBgClean.value, 10) : 0,
+      saturation: dom.adjSaturation ? Number.parseInt(dom.adjSaturation.value, 10) : 50
     } : {};
 
     const img = new Image();
@@ -1584,7 +1622,7 @@ const App = (() => {
             let options = {};
             if (currentFilter === 'manual') {
               const activePage = tab.scannedPages[tab.activePageIndex];
-              options = activePage.manualOptions || { bgClean: 50, saturation: 100 };
+              options = activePage.manualOptions || { bgClean: 0, saturation: 50 };
               page.manualOptions = { ...options };
             }
 
@@ -1700,10 +1738,7 @@ const App = (() => {
     if (dom.manualAdjustments) {
       if (tab.currentFilter === 'manual') {
         dom.manualAdjustments.classList.remove('hidden');
-        if (page.manualOptions) {
-          if (dom.adjBgClean) dom.adjBgClean.value = page.manualOptions.bgClean;
-          if (dom.adjSaturation) dom.adjSaturation.value = page.manualOptions.saturation;
-        }
+        setManualControlValues(page.manualOptions || { bgClean: 0, saturation: 50 });
       } else {
         dom.manualAdjustments.classList.add('hidden');
       }

@@ -212,18 +212,22 @@
   // A conservative default: evens out lighting and gently restores color
   // without the aggressive channel stretching used by the Color preset.
   function filterAuto(src) {
-    return filterManual(src, { bgClean: 28, saturation: 108 });
+    return filterManual(src, { bgClean: 38, saturation: 56 });
   }
 
   // ---- Filter: Manual (Custom Background Clean & Saturation) ----
   function filterManual(src, options) {
-    const bgCleanVal = options.bgClean !== undefined ? parseInt(options.bgClean) : 50; // 0 to 100
-    const satVal = options.saturation !== undefined ? parseInt(options.saturation) : 100; // 0 to 200
+    const parsedBgClean = Number.parseFloat(options.bgClean);
+    const parsedSaturation = Number.parseFloat(options.saturation);
+    const bgCleanVal = Number.isFinite(parsedBgClean) ? Math.min(100, Math.max(0, parsedBgClean)) : 0;
+    const satVal = Number.isFinite(parsedSaturation) ? Math.min(100, Math.max(0, parsedSaturation)) : 50;
 
     const rgb = new cv.Mat();
     cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
 
-    // 1. Background Clean
+    // 1. Background clean. The corrected image is blended with the original
+    // using an ease-in curve. Therefore 0 is exactly the source and the first
+    // half of the slider stays deliberately subtle.
     let cleaned = new cv.Mat();
     if (bgCleanVal > 0) {
       const bg = new cv.Mat();
@@ -232,21 +236,19 @@
       const divided = new cv.Mat();
       cv.divide(rgb, bg, divided, 255.0);
 
-      const clamped = new cv.Mat();
-      cv.normalize(divided, clamped, 0, 255, cv.NORM_MINMAX);
+      const enhanced = new cv.Mat();
+      divided.convertTo(enhanced, -1, 1.03, 3);
+      const blend = Math.pow(bgCleanVal / 100, 2) * 0.7;
+      cv.addWeighted(rgb, 1 - blend, enhanced, blend, 0, cleaned);
 
-      const alpha = 1.0 + (bgCleanVal / 100) * 0.5;
-      const beta = (bgCleanVal / 100) * 30;
-      clamped.convertTo(cleaned, -1, alpha, beta);
-
-      bg.delete(); divided.delete(); clamped.delete();
+      bg.delete(); divided.delete(); enhanced.delete();
     } else {
       rgb.copyTo(cleaned);
     }
 
     // 2. Saturation
     let result = new cv.Mat();
-    if (satVal !== 100) {
+    if (satVal !== 50) {
       const hsv = new cv.Mat();
       cv.cvtColor(cleaned, hsv, cv.COLOR_RGB2HSV);
       
@@ -254,7 +256,9 @@
       cv.split(hsv, channels);
       
       const s = channels.get(1);
-      const satScale = satVal / 100.0;
+      // 50 is neutral. The full slider only spans 75%–125% saturation so
+      // small movements do not cause abrupt or artificial colors.
+      const satScale = 1 + ((satVal - 50) / 50) * 0.25;
       s.convertTo(s, -1, satScale, 0);
       
       cv.merge(channels, hsv);
@@ -275,7 +279,7 @@
   // ---- Filter: Color (Enhanced) ----
   // Keeps hues natural while gently correcting uneven illumination.
   function filterColor(src) {
-    const corrected = filterManual(src, { bgClean: 12, saturation: 112 });
+    const corrected = filterManual(src, { bgClean: 30, saturation: 64 });
     const blurred = new cv.Mat();
     cv.GaussianBlur(corrected, blurred, new cv.Size(0, 0), 1.2);
     const result = new cv.Mat();

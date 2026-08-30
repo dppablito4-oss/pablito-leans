@@ -79,3 +79,12 @@ test('local PDFs are passed to PDF.js as bytes instead of blob URLs', async () =
   assert.match(app, /pdfjsLib\.getDocument\(\{ data: pdfBytes \}\)/);
   assert.doesNotMatch(app, /pdfjsLib\.getDocument\(fileUrl\)/);
 });
+
+test('manual adjustment starts neutral and uses a soft blend curve', async () => {
+  const html = await readFile(resolve(root, 'index.html'), 'utf8');
+  const scanner = await readFile(resolve(root, 'js/scanner.js'), 'utf8');
+  assert.match(html, /id="adj-bg-clean"[^>]+value="0"/);
+  assert.match(html, /id="adj-saturation"[^>]+max="100"[^>]+value="50"/);
+  assert.match(scanner, /Math\.pow\(bgCleanVal \/ 100, 2\) \* 0\.7/);
+  assert.match(scanner, /satVal !== 50/);
+});
