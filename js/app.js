@@ -877,16 +877,22 @@ const App = (() => {
   async function processPdf(file, isBulk = false, targetTab = currentTab()) {
     const tab = targetTab;
     showToast('Procesando PDF...', 'info');
-    let fileUrl = null;
+    let loadingTask = null;
+    let pdf = null;
+    const initialPageCount = tab.scannedPages.length;
 
     try {
       if (typeof pdfjsLib === 'undefined') {
         showToast('La librería PDF.js no está cargada aún', 'error');
         return;
       }
-      fileUrl = URL.createObjectURL(file);
-      const loadingTask = pdfjsLib.getDocument(fileUrl);
-      const pdf = await loadingTask.promise;
+      // Passing a blob: URL makes the PDF worker perform another fetch. Some
+      // browsers and service-worker combinations report status 0 for that
+      // request, even though the user already selected a valid local file.
+      // Supplying bytes directly avoids the extra fetch entirely.
+      const pdfBytes = new Uint8Array(await file.arrayBuffer());
+      loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+      pdf = await loadingTask.promise;
 
       const availableSlots = Math.max(0, MAX_PAGES_PER_TAB - tab.scannedPages.length);
       const pagesToProcess = Math.min(pdf.numPages, availableSlots);
@@ -917,6 +923,8 @@ const App = (() => {
           const context = canvas.getContext('2d');
           canvas.width = viewport.width;
           canvas.height = viewport.height;
+          context.fillStyle = '#FFFFFF';
+          context.fillRect(0, 0, canvas.width, canvas.height);
           
           await page.render({
             canvasContext: context,
@@ -968,8 +976,13 @@ const App = (() => {
           outCanvas.height = 0;
         }
       }
+      const importedPages = tab.scannedPages.length - initialPageCount;
+      if (importedPages === 0) {
+        showToast('El PDF no produjo ninguna página válida', 'error');
+        return;
+      }
       if (!isBulk && isActiveTab(tab)) {
-        showToast('PDF procesado exitosamente', 'success');
+        showToast(`${importedPages} página(s) importada(s) del PDF`, 'success');
         tab.activePageIndex = tab.scannedPages.length - 1;
         renderPagesStrip();
         updatePageCounter();
@@ -981,7 +994,12 @@ const App = (() => {
       console.error('[App] Error processing PDF:', error);
       showToast(`Error al procesar el archivo PDF: ${error.message || error}`, 'error');
     } finally {
-      if (fileUrl) URL.revokeObjectURL(fileUrl);
+      try {
+        if (pdf) await pdf.destroy();
+        else if (loadingTask) await loadingTask.destroy();
+      } catch (cleanupError) {
+        console.warn('[App] PDF worker cleanup failed:', cleanupError);
+      }
     }
   }
 

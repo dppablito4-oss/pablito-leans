@@ -72,3 +72,10 @@ test('mobile scan flow exposes camera, core filters and comparison controls', as
   assert.match(app, /cameraStream\?\.getTracks\(\)\.forEach\(track => track\.stop\(\)\)/);
   assert.match(scanner, /case 'auto':/);
 });
+
+test('local PDFs are passed to PDF.js as bytes instead of blob URLs', async () => {
+  const app = await readFile(resolve(root, 'js/app.js'), 'utf8');
+  assert.match(app, /new Uint8Array\(await file\.arrayBuffer\(\)\)/);
+  assert.match(app, /pdfjsLib\.getDocument\(\{ data: pdfBytes \}\)/);
+  assert.doesNotMatch(app, /pdfjsLib\.getDocument\(fileUrl\)/);
+});

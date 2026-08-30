@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'pablito-leans-';
-const CACHE_NAME = `${CACHE_PREFIX}v6`;
+const CACHE_NAME = `${CACHE_PREFIX}v7`;
 
 const STATIC_ASSETS = [
   './',
