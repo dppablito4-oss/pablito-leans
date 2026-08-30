@@ -39,6 +39,9 @@ const App = (() => {
   let bulkTargetTabId = null;
   let bulkJobId = 0;
   let modalTrigger = null;
+  let cameraStream = null;
+  let cameraFacingMode = 'environment';
+  let cameraTorchEnabled = false;
 
   function createTabData(name) {
     return {
@@ -47,7 +50,7 @@ const App = (() => {
       state: 'upload',
       scannedPages: [],
       activePageIndex: -1,
-      currentFilter: 'color',
+      currentFilter: 'auto',
       originalImageDataUrl: null,
       isReAdjusting: false,
       corners: null,
@@ -103,6 +106,14 @@ const App = (() => {
 
   function cacheDom() {
     dom.uploadZone = document.getElementById('upload-zone');
+    dom.cameraZone = document.getElementById('camera-zone');
+    dom.cameraVideo = document.getElementById('camera-video');
+    dom.cameraStatus = document.getElementById('camera-status');
+    dom.btnOpenCamera = document.getElementById('btn-open-camera');
+    dom.btnCameraClose = document.getElementById('btn-camera-close');
+    dom.btnCameraCapture = document.getElementById('btn-camera-capture');
+    dom.btnCameraSwitch = document.getElementById('btn-camera-switch');
+    dom.btnCameraTorch = document.getElementById('btn-camera-torch');
     dom.editorZone = document.getElementById('editor-zone');
     dom.resultZone = document.getElementById('result-zone');
     dom.editorControls = document.getElementById('editor-controls');
@@ -124,14 +135,19 @@ const App = (() => {
     dom.canvasInput = document.getElementById('canvasInput');
     dom.canvasOverlay = document.getElementById('canvasOverlay');
     dom.canvasOutput = document.getElementById('canvasOutput');
+    dom.btnCompare = document.getElementById('btn-compare');
     dom.canvasWrapper = document.getElementById('canvas-wrapper');
     dom.opencvLoader = document.getElementById('opencv-loader');
     dom.toastContainer = document.getElementById('toast-container');
     dom.filterSelector = document.getElementById('filter-selector');
     dom.filterBtns = document.querySelectorAll('.filter-option');
+    dom.advancedFilters = document.querySelector('.advanced-filters');
     dom.pagesStrip = document.getElementById('pages-strip');
     dom.pagesStripList = document.getElementById('pages-strip-list');
+    dom.btnPageLeft = document.getElementById('btn-page-left');
+    dom.btnPageRight = document.getElementById('btn-page-right');
     dom.pageCounter = document.getElementById('page-counter');
+    dom.flowSteps = document.querySelectorAll('.flow-step');
     // Tabs
     dom.tabsBar = document.getElementById('tabs-bar');
     dom.tabsList = document.getElementById('tabs-list');
@@ -167,6 +183,7 @@ const App = (() => {
     bindEvents();
 
     window.addEventListener('beforeunload', (e) => {
+      stopCamera();
       const hasPages = tabs.some(tab => tab.scannedPages.length > 0);
       if (hasPages) {
         e.preventDefault();
@@ -202,7 +219,13 @@ const App = (() => {
       dom.fileInput.click();
     });
 
-    dom.uploadZone.addEventListener('click', () => {
+    dom.btnOpenCamera.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startCamera();
+    });
+
+    dom.uploadZone.addEventListener('click', (event) => {
+      if (event.target.closest('button')) return;
       dom.fileInput.click();
     });
 
@@ -236,6 +259,30 @@ const App = (() => {
     dom.btnDownloadPdf.addEventListener('click', () => openExportModal('pdf'));
     dom.btnAddPage.addEventListener('click', addAnotherPage);
     dom.btnDeletePage.addEventListener('click', deleteActivePage);
+    dom.btnPageLeft.addEventListener('click', () => movePage(currentTab().activePageIndex, currentTab().activePageIndex - 1));
+    dom.btnPageRight.addEventListener('click', () => movePage(currentTab().activePageIndex, currentTab().activePageIndex + 1));
+    dom.btnCameraClose.addEventListener('click', closeCamera);
+    dom.btnCameraCapture.addEventListener('click', captureCameraFrame);
+    dom.btnCameraSwitch.addEventListener('click', switchCamera);
+    dom.btnCameraTorch.addEventListener('click', toggleCameraTorch);
+
+    const beginComparison = (event) => {
+      event.preventDefault();
+      dom.btnCompare.setPointerCapture?.(event.pointerId);
+      showUnfilteredPage();
+    };
+    const endComparison = (event) => {
+      event.preventDefault();
+      stopComparing();
+    };
+    dom.btnCompare.addEventListener('pointerdown', beginComparison);
+    dom.btnCompare.addEventListener('pointerup', endComparison);
+    dom.btnCompare.addEventListener('pointercancel', endComparison);
+    dom.btnCompare.addEventListener('lostpointercapture', stopComparing);
+
+    dom.flowSteps.forEach(step => {
+      step.addEventListener('click', () => handleFlowStep(step.dataset.flowStep));
+    });
 
     // Export Modal
     if (dom.btnExportClose) dom.btnExportClose.addEventListener('click', closeExportModal);
@@ -278,6 +325,187 @@ const App = (() => {
     }
   }
 
+  // ======== Manual Camera ========
+
+  async function startCamera() {
+    if (!opencvReady) {
+      showToast('Espera a que se cargue el motor de visión', 'warning');
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      showToast('Este navegador no permite usar la cámara. Elige una imagen.', 'warning');
+      dom.fileInput.click();
+      return;
+    }
+
+    stopCamera();
+    dom.btnCameraCapture.disabled = true;
+    dom.cameraStatus.textContent = 'Iniciando cámara…';
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: cameraFacingMode },
+          width: { ideal: 2560 },
+          height: { ideal: 1440 }
+        }
+      });
+      dom.cameraVideo.srcObject = cameraStream;
+      await dom.cameraVideo.play();
+      setState('camera');
+      dom.btnCameraCapture.disabled = false;
+      dom.cameraStatus.textContent = 'Encuadra el documento y captura';
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(device => device.kind === 'videoinput');
+      dom.btnCameraSwitch.disabled = cameras.length < 2;
+
+      const track = cameraStream.getVideoTracks()[0];
+      const capabilities = track?.getCapabilities?.() || {};
+      dom.btnCameraTorch.classList.toggle('hidden', !capabilities.torch);
+    } catch (error) {
+      console.error('[App] Camera error:', error);
+      stopCamera();
+      setState(currentTab().scannedPages.length ? 'result' : 'upload');
+      showToast('No se pudo abrir la cámara. Revisa el permiso o elige una imagen.', 'error');
+    }
+  }
+
+  function stopCamera() {
+    cameraStream?.getTracks().forEach(track => track.stop());
+    cameraStream = null;
+    cameraTorchEnabled = false;
+    if (dom.cameraVideo) dom.cameraVideo.srcObject = null;
+    if (dom.btnCameraTorch) {
+      dom.btnCameraTorch.classList.add('hidden');
+      dom.btnCameraTorch.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  function closeCamera() {
+    stopCamera();
+    setState(currentTab().scannedPages.length ? 'result' : 'upload');
+    if (currentTab().scannedPages.length) showActivePage();
+  }
+
+  async function switchCamera() {
+    cameraFacingMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
+    await startCamera();
+  }
+
+  async function toggleCameraTorch() {
+    const track = cameraStream?.getVideoTracks()[0];
+    if (!track) return;
+    cameraTorchEnabled = !cameraTorchEnabled;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: cameraTorchEnabled }] });
+      dom.btnCameraTorch.setAttribute('aria-pressed', String(cameraTorchEnabled));
+    } catch (error) {
+      cameraTorchEnabled = false;
+      dom.btnCameraTorch.setAttribute('aria-pressed', 'false');
+      showToast('La linterna no está disponible en este modo', 'info');
+    }
+  }
+
+  async function captureCameraFrame() {
+    const video = dom.cameraVideo;
+    if (!cameraStream || !video.videoWidth || !video.videoHeight) return;
+
+    dom.btnCameraCapture.disabled = true;
+    dom.cameraStatus.textContent = 'Preparando captura…';
+    const tab = currentTab();
+    const revision = ++tab.importRevision;
+    const safeSize = fitImageDimensions(
+      video.videoWidth,
+      video.videoHeight,
+      MAX_IMAGE_DIMENSION,
+      MAX_IMAGE_PIXELS
+    );
+    const canvas = document.createElement('canvas');
+    canvas.width = safeSize.width;
+    canvas.height = safeSize.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(video, 0, 0, safeSize.width, safeSize.height);
+
+    try {
+      const img = await loadImage(canvas.toDataURL('image/jpeg', 0.95));
+      if (!isActiveTab(tab) || revision !== tab.importRevision) return;
+      originalImage = img;
+      tab.originalImageDataUrl = img.src;
+      tab.isReAdjusting = false;
+      stopCamera();
+      goToEditor();
+      showToast('Captura lista. Ajusta las esquinas.', 'success');
+    } catch (error) {
+      console.error('[App] Capture error:', error);
+      showToast('No se pudo preparar la captura', 'error');
+      dom.btnCameraCapture.disabled = false;
+      dom.cameraStatus.textContent = 'Intenta capturar de nuevo';
+    } finally {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  }
+
+  function handleFlowStep(step) {
+    const tab = currentTab();
+    if (step === 'capture') {
+      if (tab.state === 'editor') {
+        showToast('Termina o cancela el ajuste antes de capturar otra página', 'info');
+        return;
+      }
+      startCamera();
+    } else if (step === 'adjust' && tab.scannedPages.length) {
+      startReAdjust();
+    } else if (step === 'improve' && tab.scannedPages.length) {
+      setState('result');
+      showActivePage();
+      document.querySelector('.filter-heading')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (step === 'organize' && tab.scannedPages.length) {
+      markFlowStep('organize');
+      dom.pagesStrip.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (step === 'export' && tab.scannedPages.length) {
+      markFlowStep('export');
+      openExportModal('pdf');
+    }
+  }
+
+  function markFlowStep(activeStep) {
+    dom.flowSteps.forEach(step => step.classList.toggle('active', step.dataset.flowStep === activeStep));
+  }
+
+  function updateFlowNavigation(state) {
+    const hasPages = currentTab().scannedPages.length > 0;
+    dom.flowSteps.forEach(step => {
+      const name = step.dataset.flowStep;
+      step.disabled = name !== 'capture' && !hasPages && !(name === 'adjust' && state === 'editor');
+    });
+    markFlowStep(state === 'editor' ? 'adjust' : state === 'result' ? 'improve' : 'capture');
+  }
+
+  function showUnfilteredPage() {
+    const tab = currentTab();
+    const page = tab.scannedPages[tab.activePageIndex];
+    if (!page?.warpedDataUrl) return;
+    const pageIndex = tab.activePageIndex;
+    const revision = ++tab.viewRevision;
+    dom.btnCompare.classList.add('is-comparing');
+    const img = new Image();
+    img.onload = () => {
+      if (!isActiveTab(tab) || revision !== tab.viewRevision || tab.activePageIndex !== pageIndex) return;
+      dom.canvasOutput.width = img.naturalWidth;
+      dom.canvasOutput.height = img.naturalHeight;
+      dom.canvasOutput.getContext('2d').drawImage(img, 0, 0);
+    };
+    img.src = page.warpedDataUrl;
+  }
+
+  function stopComparing() {
+    if (!dom.btnCompare.classList.contains('is-comparing')) return;
+    dom.btnCompare.classList.remove('is-comparing');
+    showActivePage();
+  }
+
   // ======== Tab Management ========
 
   function addNewTab() {
@@ -287,6 +515,7 @@ const App = (() => {
       return;
     }
 
+    stopCamera();
     // Save current transient state before switching
     saveTransientState();
 
@@ -309,6 +538,7 @@ const App = (() => {
     if (blockTabMutationWhileImporting()) return;
     if (index < 0 || index >= tabs.length) return;
 
+    stopCamera();
     // Save current state and invalidate pending image callbacks.
     currentTab().importRevision++;
     saveTransientState();
@@ -338,6 +568,7 @@ const App = (() => {
   }
 
   function doCloseTab(index) {
+    stopCamera();
     const closingName = tabs[index].name;
     tabs.splice(index, 1);
 
@@ -696,7 +927,7 @@ const App = (() => {
           let filtered = null;
           try {
             mat = cv.imread(canvas);
-            filtered = Scanner.applyFilter(mat, 'color');
+            filtered = Scanner.applyFilter(mat, 'auto');
             
             Scanner.drawToCanvas(filtered, outCanvas);
             
@@ -715,7 +946,7 @@ const App = (() => {
               dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
               width: outCanvas.width,
               height: outCanvas.height,
-              filter: 'color',
+              filter: 'auto',
               isPdf: true
             };
             if (!appendPage(tab, pageData)) {
@@ -867,7 +1098,7 @@ const App = (() => {
     let filtered = null;
     try {
       warped = Scanner.warpPerspective(mat, detectedPoints);
-      filtered = Scanner.applyFilter(warped, 'color');
+      filtered = Scanner.applyFilter(warped, 'auto');
 
       const outCanvas = document.createElement('canvas');
       Scanner.drawToCanvas(filtered, outCanvas);
@@ -884,7 +1115,7 @@ const App = (() => {
         dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
         width: outCanvas.width,
         height: outCanvas.height,
-        filter: 'color'
+        filter: 'auto'
       };
       return appendPage(tab, pageData);
     } finally {
@@ -899,13 +1130,19 @@ const App = (() => {
   // ======== State Management ========
 
   function setState(state) {
-    currentTab().state = state;
+    currentTab().state = state === 'camera' ? 'upload' : state;
+    document.body.classList.toggle('camera-open', state === 'camera');
 
     dom.uploadZone.classList.add('hidden');
+    dom.cameraZone.classList.add('hidden');
     dom.editorZone.classList.add('hidden');
     dom.resultZone.classList.add('hidden');
 
     switch (state) {
+      case 'camera':
+        dom.cameraZone.classList.remove('hidden');
+        break;
+
       case 'upload':
         dom.uploadZone.classList.remove('hidden');
         break;
@@ -918,6 +1155,7 @@ const App = (() => {
         dom.resultZone.classList.remove('hidden');
         break;
     }
+    updateFlowNavigation(state);
   }
 
   function goToUpload() {
@@ -1126,7 +1364,7 @@ const App = (() => {
       if (warpedMat) warpedMat.delete();
       warpedMat = Scanner.warpPerspective(originalMat, cornerPoints);
 
-      const targetFilter = tab.isReAdjusting ? tab.scannedPages[tab.activePageIndex].filter : 'color';
+      const targetFilter = tab.isReAdjusting ? tab.scannedPages[tab.activePageIndex].filter : 'auto';
       
       filtered = Scanner.applyFilter(warpedMat, targetFilter);
       Scanner.drawToCanvas(filtered, dom.canvasOutput);
@@ -1415,6 +1653,9 @@ const App = (() => {
     dom.filterBtns.forEach(button => button.classList.remove('active'));
     const activeBtn = document.querySelector(`[data-filter="${page.filter}"]`);
     if (activeBtn) activeBtn.classList.add('active');
+    if (dom.advancedFilters && ['gray', 'sepia', 'sketch', 'highcontrast', 'manual'].includes(page.filter)) {
+      dom.advancedFilters.open = true;
+    }
 
     const img = new Image();
     img.onload = () => {
@@ -1472,10 +1713,14 @@ const App = (() => {
 
     if (tab.scannedPages.length === 0) {
       dom.pagesStrip.classList.add('hidden');
+      dom.btnPageLeft.disabled = true;
+      dom.btnPageRight.disabled = true;
       return;
     }
 
     dom.pagesStrip.classList.remove('hidden');
+    dom.btnPageLeft.disabled = tab.activePageIndex <= 0;
+    dom.btnPageRight.disabled = tab.activePageIndex >= tab.scannedPages.length - 1;
 
     tab.scannedPages.forEach((page, i) => {
       const thumb = document.createElement('button');
@@ -1604,9 +1849,9 @@ const App = (() => {
 
   function resetFilterUI() {
     const tab = currentTab();
-    if (tab) tab.currentFilter = 'color';
+    if (tab) tab.currentFilter = 'auto';
     dom.filterBtns.forEach(b => b.classList.remove('active'));
-    document.getElementById('filter-color').classList.add('active');
+    document.getElementById('filter-auto').classList.add('active');
   }
 
     // ======== Export & Download ========

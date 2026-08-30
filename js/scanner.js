@@ -186,6 +186,8 @@
    */
   function applyFilter(src, mode, options = {}) {
     switch (mode) {
+      case 'auto':
+        return filterAuto(src);
       case 'manual':
         return filterManual(src, options);
       case 'document':
@@ -204,6 +206,13 @@
       default:
         return filterColor(src);
     }
+  }
+
+  // ---- Filter: Auto ----
+  // A conservative default: evens out lighting and gently restores color
+  // without the aggressive channel stretching used by the Color preset.
+  function filterAuto(src) {
+    return filterManual(src, { bgClean: 28, saturation: 108 });
   }
 
   // ---- Filter: Manual (Custom Background Clean & Saturation) ----
@@ -264,36 +273,15 @@
   }
 
   // ---- Filter: Color (Enhanced) ----
-  // Enhances contrast and saturation for vivid, clean colors.
+  // Keeps hues natural while gently correcting uneven illumination.
   function filterColor(src) {
-    const rgb = new cv.Mat();
-    cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
-
-    // Split channels, normalize each independently, merge back
-    const channels = new cv.MatVector();
-    cv.split(rgb, channels);
-    const channelViews = [];
-
-    for (let i = 0; i < 3; i++) {
-      const ch = channels.get(i);
-      cv.normalize(ch, ch, 0, 255, cv.NORM_MINMAX);
-      channelViews.push(ch);
-    }
-
-    const merged = new cv.Mat();
-    cv.merge(channels, merged);
-    channelViews.forEach(channel => channel.delete());
-
-    // Light sharpen via unsharp mask
+    const corrected = filterManual(src, { bgClean: 12, saturation: 112 });
     const blurred = new cv.Mat();
-    cv.GaussianBlur(merged, blurred, new cv.Size(0, 0), 2);
-    const sharpened = new cv.Mat();
-    cv.addWeighted(merged, 1.4, blurred, -0.4, 0, sharpened);
-
+    cv.GaussianBlur(corrected, blurred, new cv.Size(0, 0), 1.2);
     const result = new cv.Mat();
-    cv.cvtColor(sharpened, result, cv.COLOR_RGB2RGBA);
-
-    rgb.delete(); channels.delete(); merged.delete(); blurred.delete(); sharpened.delete();
+    cv.addWeighted(corrected, 1.18, blurred, -0.18, 0, result);
+    corrected.delete();
+    blurred.delete();
     return result;
   }
 

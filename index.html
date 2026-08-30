@@ -51,25 +51,56 @@
   <!-- ============ MAIN ============ -->
   <main class="app-main" id="app-main">
 
-    <!-- STATE 1: Upload -->
-    <section class="upload-zone" id="upload-zone" aria-label="Subir documento">
+    <!-- STATE 0: Camera -->
+    <section class="camera-zone hidden" id="camera-zone" aria-label="Cámara del escáner">
+      <video id="camera-video" class="camera-video" autoplay playsinline muted></video>
+      <div class="camera-guide" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <div class="camera-topbar">
+        <button class="camera-action" id="btn-camera-close" type="button" aria-label="Cerrar cámara">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <p id="camera-status">Encuadra el documento y captura</p>
+        <button class="camera-action hidden" id="btn-camera-torch" type="button" aria-label="Activar linterna" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h6l1 7-4 4-4-4 1-7Zm3 11v9m-4-4 4 4 4-4"/></svg>
+        </button>
+      </div>
+      <div class="camera-controls">
+        <button class="camera-action" id="btn-camera-switch" type="button" aria-label="Cambiar cámara">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="m16 11 2 2-2 2M8 15l-2-2 2-2M7 13h10"/></svg>
+        </button>
+        <button class="camera-shutter" id="btn-camera-capture" type="button" aria-label="Capturar documento"><span></span></button>
+        <span class="camera-control-spacer" aria-hidden="true"></span>
+      </div>
+    </section>
+
+    <!-- STATE 1: Start -->
+    <section class="upload-zone" id="upload-zone" aria-label="Nuevo escaneo">
       <svg class="upload-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
         <polyline points="17 8 12 3 7 8"/>
         <line x1="12" y1="3" x2="12" y2="15"/>
       </svg>
       <div class="upload-zone__text">
-        <h2>Sube tu documento</h2>
-        <p>Arrastra una imagen aquí o usa el botón</p>
+        <h2>¿Qué quieres escanear?</h2>
+        <p>Todo se procesa localmente en tu dispositivo</p>
       </div>
-      <button class="upload-zone__btn" id="btn-select-file" type="button">
+      <div class="start-actions">
+      <button class="upload-zone__btn upload-zone__btn--camera" id="btn-open-camera" type="button">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.5 4 16 7h4a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4l1.5-3h5Z"/><circle cx="12" cy="13" r="3"/>
+        </svg>
+        Usar cámara
+      </button>
+      <button class="upload-zone__btn upload-zone__btn--secondary" id="btn-select-file" type="button">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
           <circle cx="8.5" cy="8.5" r="1.5"/>
           <polyline points="21 15 16 10 5 21"/>
         </svg>
-        Seleccionar archivo
+        Elegir imágenes o PDF
       </button>
+      </div>
+      <p class="drop-hint">En PC también puedes arrastrar archivos aquí</p>
       <input type="file" accept="image/*,application/pdf" multiple class="upload-zone__input" id="file-input">
     </section>
 
@@ -135,6 +166,10 @@
       <div class="result-main">
         <div class="result-canvas-wrapper">
           <canvas id="canvasOutput" role="img" aria-label="Vista previa de la página escaneada"></canvas>
+          <button class="compare-button" id="btn-compare" type="button" aria-label="Mantén pulsado para ver la imagen sin filtro">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>Mantén para ver original</span>
+          </button>
         </div>
       </div>
 
@@ -150,19 +185,33 @@
         </div>
 
         <div class="pages-strip hidden" id="pages-strip">
+          <div class="pages-strip__toolbar">
+            <strong>Ordenar páginas</strong>
+            <div>
+              <button class="page-move" id="btn-page-left" type="button" aria-label="Mover página a la izquierda">←</button>
+              <button class="page-move" id="btn-page-right" type="button" aria-label="Mover página a la derecha">→</button>
+            </div>
+          </div>
           <div class="pages-strip__list" id="pages-strip-list"></div>
         </div>
 
-        <div class="filter-selector" id="filter-selector">
-          <button class="filter-option active" data-filter="color" id="filter-color">Color</button>
+        <div class="filter-heading"><strong>Mejorar</strong><span>Elige el acabado</span></div>
+        <div class="filter-selector filter-selector--primary" id="filter-selector">
+          <button class="filter-option active" data-filter="auto" id="filter-auto">Auto</button>
           <button class="filter-option" data-filter="document" id="filter-document">Documento</button>
           <button class="filter-option" data-filter="whiteboard" id="filter-whiteboard">Pizarra</button>
+          <button class="filter-option" data-filter="color" id="filter-color">Color</button>
+        </div>
+        <details class="advanced-filters">
+          <summary>Más filtros y ajustes</summary>
+          <div class="filter-selector filter-selector--advanced">
           <button class="filter-option" data-filter="gray" id="filter-gray">Grises</button>
           <button class="filter-option" data-filter="sepia" id="filter-sepia">Sepia</button>
           <button class="filter-option" data-filter="sketch" id="filter-sketch">Boceto</button>
           <button class="filter-option" data-filter="highcontrast" id="filter-highcontrast">Alto Contraste</button>
           <button class="filter-option" data-filter="manual" id="filter-manual">Ajuste Digital</button>
-        </div>
+          </div>
+        </details>
 
         <div class="manual-adjustments hidden" id="manual-adjustments">
           <div class="slider-group">
@@ -230,6 +279,14 @@
     </section>
 
   </main>
+
+  <nav class="flow-nav" id="flow-nav" aria-label="Flujo del escaneo">
+    <button class="flow-step active" data-flow-step="capture" type="button"><span>1</span>Capturar</button>
+    <button class="flow-step" data-flow-step="adjust" type="button" disabled><span>2</span>Ajustar</button>
+    <button class="flow-step" data-flow-step="improve" type="button" disabled><span>3</span>Mejorar</button>
+    <button class="flow-step" data-flow-step="organize" type="button" disabled><span>4</span>Ordenar</button>
+    <button class="flow-step" data-flow-step="export" type="button" disabled><span>5</span>Exportar</button>
+  </nav>
 
   <!-- ============ LOADER OVERLAY ============ -->
   <div class="loader-overlay" id="opencv-loader">

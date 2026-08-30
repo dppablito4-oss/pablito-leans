@@ -9,10 +9,13 @@ Herramienta web estática que permite escanear documentos directamente desde el 
 ## ✨ Características
 
 - 📄 **Detección automática de bordes** con OpenCV.js (Canny + contornos)
+- 📷 **Cámara manual integrada** con cámara trasera, cambio de lente y linterna compatible
 - 🎯 **Ajuste manual de esquinas** con nodos arrastrables (mouse y touch)
 - 🔄 **Transformación de perspectiva** para aplanar documentos
-- 🎨 **Filtros**: Blanco & Negro, Escala de Grises, Color mejorado
-- 📥 **Descarga directa** en PNG
+- 🎨 **Cuatro filtros principales**: Auto, Documento, Pizarra y Color
+- 👁️ **Comparación antes/después** manteniendo pulsada la vista previa
+- 📚 **Flujo por etapas** optimizado para móvil y vista de dos columnas en PC
+- 📥 **Exportación** a PDF, JPG y ZIP con selección de páginas
 - 📱 **Responsive** y compatible con cámaras de celular
 - 🔒 **Procesamiento local** — los documentos no se suben a un servidor
 - ⌨️ **Accesible por teclado** — pestañas, diálogos y ajuste fino de esquinas

@@ -43,3 +43,32 @@ test('third-party document scripts use subresource integrity', async () => {
   assert.match(bootstrap, /@seadong\/opencv-js@4\.10\.0/);
   assert.match(bootstrap, /integrity = 'sha384-/);
 });
+
+test('mobile scan flow exposes camera, core filters and comparison controls', async () => {
+  const html = await readFile(resolve(root, 'index.html'), 'utf8');
+  const app = await readFile(resolve(root, 'js/app.js'), 'utf8');
+  const scanner = await readFile(resolve(root, 'js/scanner.js'), 'utf8');
+
+  for (const id of [
+    'camera-zone',
+    'camera-video',
+    'btn-open-camera',
+    'btn-camera-capture',
+    'btn-camera-switch',
+    'btn-camera-torch',
+    'btn-compare',
+    'btn-page-left',
+    'btn-page-right',
+    'flow-nav',
+    'filter-auto',
+    'filter-document',
+    'filter-whiteboard',
+    'filter-color'
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+
+  assert.match(app, /navigator\.mediaDevices\.getUserMedia/);
+  assert.match(app, /cameraStream\?\.getTracks\(\)\.forEach\(track => track\.stop\(\)\)/);
+  assert.match(scanner, /case 'auto':/);
+});

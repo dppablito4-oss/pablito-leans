@@ -436,6 +436,286 @@ button:disabled {
   }
 }
 
+/* ============================================
+   MOBILE-FIRST SCAN FLOW
+   ============================================ */
+.start-actions {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 360px);
+  display: grid;
+  gap: 12px;
+}
+
+.start-actions .upload-zone__btn {
+  width: 100%;
+  min-height: 52px;
+  justify-content: center;
+}
+
+.upload-zone__btn--secondary {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--glass-border);
+  box-shadow: none;
+}
+
+.drop-hint {
+  position: relative;
+  z-index: 1;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.camera-zone {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  overflow: hidden;
+  background: #000;
+}
+
+.camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-topbar,
+.camera-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 48px 1fr 48px;
+  align-items: center;
+  gap: 12px;
+  padding-left: max(18px, env(safe-area-inset-left));
+  padding-right: max(18px, env(safe-area-inset-right));
+}
+
+.camera-topbar {
+  top: 0;
+  padding-top: max(18px, env(safe-area-inset-top));
+  padding-bottom: 32px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent);
+}
+
+.camera-topbar p {
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  text-shadow: 0 1px 6px #000;
+}
+
+.camera-controls {
+  bottom: 0;
+  padding-top: 42px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82), transparent);
+}
+
+.camera-action,
+.camera-control-spacer {
+  width: 46px;
+  height: 46px;
+}
+
+.camera-action {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(15, 15, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(12px);
+}
+
+.camera-action[aria-pressed="true"] {
+  color: #111;
+  background: #ffe066;
+}
+
+.camera-action svg,
+.compare-button svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.camera-shutter {
+  justify-self: center;
+  width: 76px;
+  height: 76px;
+  padding: 5px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+}
+
+.camera-shutter span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.camera-shutter:active span {
+  transform: scale(0.86);
+  background: var(--accent);
+}
+
+.camera-guide {
+  position: absolute;
+  inset: 17% 7% 20%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.camera-guide span {
+  position: absolute;
+  width: 42px;
+  height: 42px;
+  border-color: var(--accent);
+  filter: drop-shadow(0 0 5px rgba(0, 212, 255, 0.7));
+}
+
+.camera-guide span:nth-child(1) { top: 0; left: 0; border-top: 3px solid var(--accent); border-left: 3px solid var(--accent); border-radius: 12px 0 0; }
+.camera-guide span:nth-child(2) { top: 0; right: 0; border-top: 3px solid var(--accent); border-right: 3px solid var(--accent); border-radius: 0 12px 0 0; }
+.camera-guide span:nth-child(3) { bottom: 0; right: 0; border-bottom: 3px solid var(--accent); border-right: 3px solid var(--accent); border-radius: 0 0 12px; }
+.camera-guide span:nth-child(4) { bottom: 0; left: 0; border-bottom: 3px solid var(--accent); border-left: 3px solid var(--accent); border-radius: 0 0 0 12px; }
+
+.filter-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.filter-heading strong { font-size: 0.95rem; }
+.filter-heading span { color: var(--text-muted); font-size: 0.75rem; }
+
+.filter-selector--primary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(max-content, 1fr));
+  border-radius: var(--radius-md);
+}
+
+.filter-selector--primary .filter-option { text-align: center; }
+
+.advanced-filters {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.advanced-filters summary {
+  padding: 10px 14px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.filter-selector--advanced {
+  margin: 0 8px 8px;
+  background: transparent;
+  border: 0;
+}
+
+.compare-button {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  color: #fff;
+  background: rgba(7, 7, 13, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-full);
+  backdrop-filter: blur(14px);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  touch-action: none;
+}
+
+.compare-button.is-comparing { color: var(--accent); }
+
+.flow-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 110;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  background: rgba(8, 8, 14, 0.94);
+  border-top: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px);
+}
+
+.flow-step {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  min-height: 50px;
+  color: var(--text-muted);
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+
+.flow-step span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-surface-hover);
+  font-size: 0.7rem;
+}
+
+.flow-step.active { color: var(--accent); }
+.flow-step.active span { color: #000; background: var(--accent-gradient); }
+.flow-step:disabled { opacity: 0.38; }
+
+@media (max-width: 1023px) {
+  .app-main { padding-bottom: 168px; }
+  .controls-panel { bottom: calc(62px + env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 480px) {
+  .upload-zone {
+    min-height: min(620px, calc(100dvh - 190px));
+    aspect-ratio: auto;
+    gap: 18px;
+    padding: 24px 18px;
+  }
+
+  .upload-zone__icon { width: 58px; height: 58px; }
+  .drop-hint { display: none; }
+  .filter-selector--primary { overflow-x: auto; }
+  .compare-button span { display: none; }
+  .compare-button { left: auto; right: 10px; transform: none; width: 44px; padding: 10px; }
+}
+
+@media (min-width: 1024px) {
+  .flow-nav { display: none; }
+  .start-actions { grid-template-columns: 1fr 1.35fr; width: min(100%, 480px); }
+  .camera-zone { inset: 3vh 5vw; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1632,5 +1912,67 @@ button:disabled {
   }
   .modal-overlay.hidden .modal-dialog {
     transform: translateY(20px) scale(0.95);
+  }
+}
+
+.pages-strip__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.pages-strip__toolbar > div { display: flex; gap: 6px; }
+
+.page-move {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.page-move:disabled { opacity: 0.3; }
+
+/* Keep scan controls above the mobile flow bar. These overrides intentionally
+   live last so the original responsive rules cannot collapse the new layout. */
+body.camera-open { overflow: hidden; }
+body.camera-open .app-main { z-index: 500; }
+
+.upload-zone__btn.upload-zone__btn--secondary {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--glass-border);
+  box-shadow: none;
+}
+
+.filter-selector.filter-selector--primary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(max-content, 1fr));
+  border-radius: var(--radius-md);
+}
+
+.filter-selector.filter-selector--advanced {
+  margin: 0 8px 8px;
+  background: transparent;
+  border: 0;
+}
+
+@media (max-width: 1023px) {
+  .app-main { padding-bottom: 168px; }
+  .controls-panel { bottom: calc(62px + env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 480px) {
+  .upload-zone {
+    min-height: min(620px, calc(100dvh - 190px));
+    aspect-ratio: auto;
+    gap: 18px;
+    padding: 24px 18px;
   }
 }
