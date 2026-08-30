@@ -22,18 +22,34 @@
     }
   }
 
+  function waitForOpenCvApi(timeoutMs = 30000) {
+    const startedAt = Date.now();
+    return new Promise((resolve, reject) => {
+      const check = () => {
+        if (window.cv?.Mat) {
+          // Never resolve with `cv`: this build exposes a broken thenable and
+          // Promise resolution would invoke it recursively.
+          resolve();
+          return;
+        }
+        if (Date.now() - startedAt >= timeoutMs) {
+          reject(new Error('OpenCV no terminó de inicializar dentro del tiempo esperado'));
+          return;
+        }
+        window.setTimeout(check, 50);
+      };
+      check();
+    });
+  }
+
   window.onOpenCvReady = async function onOpenCvReady() {
     try {
-      if (window.cv && typeof window.cv.then === 'function') {
-        window.cv = await window.cv;
-      }
-      if (window.cv?.Mat) {
-        notifyOpenCvReady();
-      } else if (window.cv) {
-        window.cv.onRuntimeInitialized = notifyOpenCvReady;
-      } else {
+      if (!window.cv) {
         throw new Error('OpenCV no expuso su API');
       }
+      window.cv.onRuntimeInitialized = notifyOpenCvReady;
+      await waitForOpenCvApi();
+      notifyOpenCvReady();
     } catch (error) {
       console.error('[Pablito Leans] OpenCV initialization failed:', error);
       window.onOpenCvError();
