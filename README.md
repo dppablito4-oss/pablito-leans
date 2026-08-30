@@ -14,7 +14,13 @@ Herramienta web estática que permite escanear documentos directamente desde el 
 - 🎨 **Filtros**: Blanco & Negro, Escala de Grises, Color mejorado
 - 📥 **Descarga directa** en PNG
 - 📱 **Responsive** y compatible con cámaras de celular
-- 🔒 **100% privado** — todo se procesa localmente, sin servidores
+- 🔒 **Procesamiento local** — los documentos no se suben a un servidor
+- ⌨️ **Accesible por teclado** — pestañas, diálogos y ajuste fino de esquinas
+- 📴 **PWA offline** — recursos críticos cacheados tras la primera instalación
+
+> La aplicación descarga OpenCV.js, PDF.js y JSZip desde CDNs con versiones
+> fijas. Esas solicitudes exponen al proveedor los metadatos normales de red,
+> pero el contenido de tus documentos permanece dentro del navegador.
 
 ## 🛠️ Stack
 
@@ -22,6 +28,11 @@ Herramienta web estática que permite escanear documentos directamente desde el 
 - [OpenCV.js](https://docs.opencv.org/4.x/d5/d10/tutorial_js_root.html) vía WebAssembly
 - HTML5 Canvas
 - GitHub Pages
+
+Para proteger la memoria en móviles, cada archivo está limitado a 50 MB, cada
+imagen se normaliza a un máximo de 4096 px/16 MP y cada documento tiene límites
+de 100 páginas y aproximadamente 200 MB de datos en memoria.
+El conjunto de documentos abiertos se limita además a unos 350 MB estimados.
 
 ## 🚀 Uso Local
 
@@ -41,11 +52,21 @@ npx serve .
 ├── css/style.css       # Sistema de diseño
 ├── js/
 │   ├── app.js          # Orquestador principal
+│   ├── bootstrap.js    # Dependencias externas y service worker
 │   ├── scanner.js      # Motor de visión (OpenCV.js)
-│   └── corners.js      # Esquinas interactivas
-├── assets/favicon.svg  # Favicon
+│   ├── corners.js      # Esquinas interactivas
+│   └── utils.js        # Utilidades puras y comprobables
+├── test/               # Pruebas con node:test
+├── assets/             # Favicon e iconos PWA
 ├── CNAME               # Dominio custom
-└── PLAN.MD             # Plan de desarrollo
+└── LICENSE             # Licencia MIT
+```
+
+## ✅ Verificación
+
+```bash
+npm run check
+npm test
 ```
 
 ## 📜 Licencia

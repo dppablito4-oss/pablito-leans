@@ -2,10 +2,12 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pablito Leans — Escáner de Documentos</title>
   <meta name="description" content="Escanea documentos desde tu celular o PC. Detecta bordes automáticamente, ajusta esquinas y descarga imágenes limpias y planas. Sin servidores, 100% privado.">
   <meta name="theme-color" content="#07070d">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdnjs.cloudflare.com; connect-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
@@ -14,8 +16,12 @@
   <meta property="og:description" content="Escanea documentos al instante desde tu navegador. Detección de bordes, ajuste manual y exportación limpia.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://leans.sypablitodp.site">
+  <meta property="og:image" content="https://leans.sypablitodp.site/assets/icon-512.png">
+  <meta name="twitter:card" content="summary">
 
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="canonical" href="https://leans.sypablitodp.site/">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -29,8 +35,8 @@
   </header>
 
   <!-- ============ DOCUMENT TABS ============ -->
-  <nav class="tabs-bar" id="tabs-bar">
-    <div class="tabs-list" id="tabs-list">
+  <nav class="tabs-bar" id="tabs-bar" aria-label="Documentos abiertos">
+    <div class="tabs-list" id="tabs-list" role="tablist" aria-label="Documentos">
       <!-- Tabs are rendered dynamically by JS -->
     </div>
     <button class="tab-add" id="btn-add-tab" type="button" title="Nuevo Documento">
@@ -71,7 +77,7 @@
     <section class="editor-zone hidden" id="editor-zone" aria-label="Editor de esquinas">
       <div class="editor-main">
         <div class="canvas-wrapper" id="canvas-wrapper">
-          <canvas id="canvasInput"></canvas>
+          <canvas id="canvasInput" aria-hidden="true"></canvas>
           <canvas id="canvasOverlay" class="canvas-overlay"></canvas>
         </div>
       </div>
@@ -83,8 +89,9 @@
             <line x1="12" y1="16" x2="12" y2="12"/>
             <line x1="12" y1="8" x2="12.01" y2="8"/>
           </svg>
-          <span>Arrastra los puntos para ajustar las esquinas</span>
+          <span>Arrastra los puntos o usa el teclado para ajustar las esquinas</span>
         </div>
+        <p class="sr-only" id="corner-keyboard-help">Pulsa del 1 al 4 para elegir una esquina. Usa las flechas para moverla y Mayús más flecha para moverla diez píxeles.</p>
         <div class="editor-top-row">
           <span class="page-counter hidden" id="editor-page-counter">1 / 1</span>
         </div>
@@ -127,7 +134,7 @@
     <section class="result-zone hidden" id="result-zone" aria-label="Resultado del escaneo">
       <div class="result-main">
         <div class="result-canvas-wrapper">
-          <canvas id="canvasOutput"></canvas>
+          <canvas id="canvasOutput" role="img" aria-label="Vista previa de la página escaneada"></canvas>
         </div>
       </div>
 
@@ -249,11 +256,11 @@
   </div>
 
   <!-- ============ UNIFIED EXPORT MODAL ============ -->
-  <div class="modal-overlay hidden" id="export-modal-overlay">
-    <div class="modal-dialog">
+  <div class="modal-overlay hidden" id="export-modal-overlay" aria-hidden="true">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
       <div class="modal-header">
         <h3 id="export-modal-title">Exportar Documento</h3>
-        <button class="btn-close" id="export-modal-close" type="button" title="Cerrar">
+        <button class="btn-close" id="export-modal-close" type="button" title="Cerrar" aria-label="Cerrar exportación">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -360,53 +367,9 @@
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
   <!-- ============ SCRIPTS ============ -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  </script>
-  <script>
-    // Global callback for OpenCV.js readiness
-    function onOpenCvReady() {
-      console.log('[Pablito Leans] OpenCV.js loaded successfully');
-      if (window.App && window.App.onOpenCvReady) {
-        window.App.onOpenCvReady();
-      } else {
-        window._opencvReady = true;
-      }
-    }
-
-    // Error handler if OpenCV CDN fails to load
-    function onOpenCvError() {
-      console.error('[Pablito Leans] Failed to load OpenCV.js');
-      window._opencvFailed = true;
-      // Replace loader content with retry UI
-      var loader = document.getElementById('opencv-loader');
-      if (loader) {
-        loader.innerHTML =
-          '<div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px;">' +
-            '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#FF5252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-              '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' +
-            '</svg>' +
-            '<div style="color:#F0F0F5;font-size:1rem;font-weight:600;">No se pudo cargar el motor de visión</div>' +
-            '<div style="color:#8888A0;font-size:0.875rem;">OpenCV.js no respondió. Puede ser un problema temporal del servidor.</div>' +
-            '<button onclick="location.reload()" style="margin-top:8px;padding:10px 28px;background:linear-gradient(135deg,#00D4FF,#7B61FF);color:#000;font-weight:600;font-size:0.875rem;border:none;border-radius:9999px;cursor:pointer;">Reintentar</button>' +
-          '</div>';
-      }
-    }
-  </script>
-  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvError()"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
+  <script src="js/bootstrap.js"></script>
   <script type="module" src="js/app.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').then(registration => {
-          console.log('[Pablito Leans] ServiceWorker registration successful with scope: ', registration.scope);
-        }, err => {
-          console.log('[Pablito Leans] ServiceWorker registration failed: ', err);
-        });
-      });
-    }
-  </script>
 </body>
 </html>

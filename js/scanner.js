@@ -124,7 +124,10 @@
    * @returns {cv.Mat} Warped image
    */
   function warpPerspective(src, srcPoints) {
-    const [tl, tr, br, bl] = srcPoints;
+    if (!Array.isArray(srcPoints) || srcPoints.length !== 4) {
+      throw new TypeError('Se requieren cuatro esquinas');
+    }
+    const [tl, tr, br, bl] = sortCorners(srcPoints);
 
     // Calculate output dimensions
     const widthTop = Math.hypot(tr.x - tl.x, tr.y - tl.y);
@@ -134,6 +137,10 @@
     const heightLeft = Math.hypot(bl.x - tl.x, bl.y - tl.y);
     const heightRight = Math.hypot(br.x - tr.x, br.y - tr.y);
     const maxHeight = Math.round(Math.max(heightLeft, heightRight));
+
+    if (maxWidth < 2 || maxHeight < 2) {
+      throw new RangeError('Las esquinas no forman un área válida');
+    }
 
     // Source matrix
     const srcMat = cv.matFromArray(4, 1, cv.CV_32FC2, [
@@ -146,22 +153,26 @@
     // Destination matrix
     const dstMat = cv.matFromArray(4, 1, cv.CV_32FC2, [
       0, 0,
-      maxWidth, 0,
-      maxWidth, maxHeight,
-      0, maxHeight
+      maxWidth - 1, 0,
+      maxWidth - 1, maxHeight - 1,
+      0, maxHeight - 1
     ]);
 
-    const M = cv.getPerspectiveTransform(srcMat, dstMat);
+    let M = null;
     const dst = new cv.Mat();
-    const dstSize = new cv.Size(maxWidth, maxHeight);
-
-    cv.warpPerspective(src, dst, M, dstSize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
-
-    srcMat.delete();
-    dstMat.delete();
-    M.delete();
-
-    return dst;
+    try {
+      M = cv.getPerspectiveTransform(srcMat, dstMat);
+      const dstSize = new cv.Size(maxWidth, maxHeight);
+      cv.warpPerspective(src, dst, M, dstSize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+      return dst;
+    } catch (error) {
+      dst.delete();
+      throw error;
+    } finally {
+      srcMat.delete();
+      dstMat.delete();
+      if (M) M.delete();
+    }
   }
 
   /**
@@ -261,14 +272,17 @@
     // Split channels, normalize each independently, merge back
     const channels = new cv.MatVector();
     cv.split(rgb, channels);
+    const channelViews = [];
 
     for (let i = 0; i < 3; i++) {
       const ch = channels.get(i);
       cv.normalize(ch, ch, 0, 255, cv.NORM_MINMAX);
+      channelViews.push(ch);
     }
 
     const merged = new cv.Mat();
     cv.merge(channels, merged);
+    channelViews.forEach(channel => channel.delete());
 
     // Light sharpen via unsharp mask
     const blurred = new cv.Mat();

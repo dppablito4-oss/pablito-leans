@@ -73,9 +73,15 @@
     overlayCanvas.addEventListener('pointermove', onPointerMove);
     overlayCanvas.addEventListener('pointerup', onPointerUp);
     overlayCanvas.addEventListener('pointercancel', onPointerUp);
+    overlayCanvas.addEventListener('keydown', onKeyDown);
+    overlayCanvas.addEventListener('focus', onCanvasFocus);
     overlayCanvas.style.touchAction = 'none'; // Prevent scroll on touch
+    overlayCanvas.tabIndex = 0;
+    overlayCanvas.setAttribute('role', 'application');
+    overlayCanvas.setAttribute('aria-describedby', 'corner-keyboard-help');
 
     draw();
+    updateAriaLabel();
   }
 
   /**
@@ -84,8 +90,8 @@
    */
   function getPoints() {
     return points.map(p => ({
-      x: Math.round(p.x * stateScaleX),
-      y: Math.round(p.y * stateScaleY)
+      x: Math.max(0, Math.min(stateImageWidth - 1, Math.round(p.x * stateScaleX))),
+      y: Math.max(0, Math.min(stateImageHeight - 1, Math.round(p.y * stateScaleY)))
     }));
   }
 
@@ -98,6 +104,8 @@
     overlayCanvas.removeEventListener('pointermove', onPointerMove);
     overlayCanvas.removeEventListener('pointerup', onPointerUp);
     overlayCanvas.removeEventListener('pointercancel', onPointerUp);
+    overlayCanvas.removeEventListener('keydown', onKeyDown);
+    overlayCanvas.removeEventListener('focus', onCanvasFocus);
     points = [];
     activePointIndex = -1;
     isDragging = false;
@@ -136,6 +144,7 @@
     activePointIndex = hitTest(pos);
     if (activePointIndex >= 0) {
       isDragging = true;
+      updateAriaLabel();
       draw();
     }
   }
@@ -156,7 +165,51 @@
     points[activePointIndex].x = Math.max(0, Math.min(pos.x, overlayCanvas.width));
     points[activePointIndex].y = Math.max(0, Math.min(pos.y, overlayCanvas.height));
 
+    updateAriaLabel();
     draw();
+  }
+
+  function onCanvasFocus() {
+    if (activePointIndex < 0) activePointIndex = 0;
+    updateAriaLabel();
+    draw();
+  }
+
+  function onKeyDown(e) {
+    if (!overlayCanvas || points.length !== 4) return;
+
+    if (/^[1-4]$/.test(e.key)) {
+      e.preventDefault();
+      activePointIndex = Number(e.key) - 1;
+      updateAriaLabel();
+      draw();
+      return;
+    }
+
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    if (activePointIndex < 0) activePointIndex = 0;
+    const step = e.shiftKey ? 10 : 1;
+    const point = points[activePointIndex];
+    if (e.key === 'ArrowLeft') point.x -= step;
+    if (e.key === 'ArrowRight') point.x += step;
+    if (e.key === 'ArrowUp') point.y -= step;
+    if (e.key === 'ArrowDown') point.y += step;
+    point.x = Math.max(0, Math.min(point.x, overlayCanvas.width));
+    point.y = Math.max(0, Math.min(point.y, overlayCanvas.height));
+    updateAriaLabel();
+    draw();
+  }
+
+  function updateAriaLabel() {
+    if (!overlayCanvas || points.length !== 4) return;
+    const pointIndex = activePointIndex >= 0 ? activePointIndex : 0;
+    const names = ['superior izquierda', 'superior derecha', 'inferior derecha', 'inferior izquierda'];
+    const point = points[pointIndex];
+    overlayCanvas.setAttribute(
+      'aria-label',
+      `Ajuste de esquinas. Esquina ${names[pointIndex]}, posición ${Math.round(point.x)}, ${Math.round(point.y)}.`
+    );
   }
 
   function onPointerUp(e) {

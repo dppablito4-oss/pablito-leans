@@ -125,6 +125,23 @@ button {
   outline-offset: 2px;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 /* ---------- Scrollbar ---------- */
 ::-webkit-scrollbar {
   width: 6px;
@@ -220,19 +237,29 @@ button {
 .tab {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: 8px 14px;
+  gap: 0;
+  padding: 0;
   background: var(--bg-surface);
   border: 1px solid transparent;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   color: var(--text-secondary);
   font-size: 0.8125rem;
   font-weight: 500;
-  cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
   position: relative;
   min-width: 0;
+}
+
+.tab__select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: 8px 8px 8px 14px;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .tab:hover {
@@ -292,11 +319,33 @@ button {
   transition: all var(--transition-fast);
   flex-shrink: 0;
   opacity: 0;
+  margin-right: 8px;
 }
 
 .tab:hover .tab__close,
-.tab.active .tab__close {
+.tab.active .tab__close,
+.tab__close:focus-visible {
   opacity: 1;
+}
+
+.loader-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: 420px;
+  padding: var(--space-xl);
+  text-align: center;
+}
+
+.loader-error h2 {
+  color: var(--text-primary);
+  font-size: 1.125rem;
+}
+
+.loader-error p {
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
 .tab__close:hover {
@@ -384,6 +433,17 @@ button {
 
   .tab__name {
     max-width: 80px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -1357,7 +1417,6 @@ button {
     gap: var(--space-xs);
     justify-content: space-around;
   }
-}
 
   /* ---- Filters wrap in sidebar instead of scrolling ---- */
   .filter-selector {

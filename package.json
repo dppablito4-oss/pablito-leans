@@ -1,0 +1,14 @@
+{
+  "name": "pablito-leans",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check js/app.js && node --check js/bootstrap.js && node --check js/scanner.js && node --check js/corners.js && node --check js/utils.js && node --check sw.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
