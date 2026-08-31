@@ -209,6 +209,164 @@ no deben consumir tiempo antes de perfeccionar los cuatro modos principales.
 
 **Objetivo:** obtener el archivo correcto con la menor cantidad de decisiones.
 
+#### Fase 5A — Composición de impresión por medidas
+
+**Objetivo:** separar el tamaño físico de la imagen del tamaño del papel y
+permitir preparar trabajos listos para imprimir, desde un DNI hasta un póster.
+
+El exportador tendrá cuatro conceptos independientes:
+
+1. **Contenido:** la página o imagen que se va a imprimir.
+2. **Tamaño final:** cuánto debe medir físicamente cada pieza impresa.
+3. **Papel:** A0, A1, A2, A3, A4, A5 o medida personalizada.
+4. **Distribución:** una pieza, varias piezas o un póster dividido en hojas.
+
+##### Presets de tamaño final
+
+- [x] DNI / tarjeta ID-1: 85.6 × 54 mm.
+- [x] DNI ampliado al 195%: 166.92 × 105.3 mm.
+- [x] Fotografía: 3×4, 4×4 y 5×5.
+- [ ] Hoja completa: A0, A1, A2, A3, A4 y A5.
+- [ ] Tamaño original calculado desde la resolución y los DPI.
+- [x] Tamaño personalizado con ancho, alto y selector de `mm`, `cm` o
+  pulgadas.
+- [x] Escala porcentual adicional: 50%, 100%, 195%, 200% o valor
+  personalizado.
+- [ ] Permitir intercambiar ancho y alto sin modificar los valores.
+- [ ] Guardar presets personales con nombre, por ejemplo “Etiqueta 55×75”.
+
+El preset DNI usará 85.6 × 54 mm como valor editable. El modo 195% no tendrá
+medidas duplicadas internamente: será el mismo preset multiplicado por 1.95.
+
+##### Modos de distribución
+
+- [x] **Una por hoja:** coloca una pieza a su tamaño exacto, centrada en cada
+  hoja. No la amplía silenciosamente.
+- [x] **Llenar hoja:** calcula cuántas copias caben en una hoja y crea una
+  cuadrícula automática.
+- [x] **Cantidad definida:** el usuario indica cuántas copias necesita y el
+  sistema calcula cuántas hojas se requieren.
+- [ ] **Póster:** amplía una imagen al tamaño físico solicitado y la divide
+  entre varias hojas del papel elegido.
+
+“Ajustar a hoja” seguirá existiendo como acción separada, pero deberá mostrar
+claramente el porcentaje de escala aplicado. Nunca debe confundirse con
+“tamaño real”.
+
+##### Calculadora para llenar una hoja
+
+- [x] Elegir papel A0–A5.
+- [x] Elegir margen externo y separación entre piezas.
+- [ ] Rotar automáticamente cada pieza si permite colocar más copias.
+- [x] Mostrar filas, columnas, copias por hoja y hojas necesarias.
+- [ ] Permitir repetir la misma página o distribuir páginas diferentes.
+- [x] Centrar la cuadrícula y repartir el espacio sobrante de forma uniforme.
+- [ ] Añadir opcionalmente líneas de corte, sangrado y marcas de registro.
+- [ ] Advertir cuando la pieza no cabe por los márgenes o el área no imprimible.
+
+Ejemplo esperado: al ingresar `5 × 5 cm`, seleccionar A4 y “Llenar hoja”, la
+vista previa indicará exactamente cuántas piezas caben según los márgenes y la
+separación configurados. El cálculo no asumirá impresión sin bordes a menos que
+el usuario la seleccione.
+
+##### Recomendación automática de papel
+
+- [x] Recomendar el papel ISO más pequeño donde quepa la medida final,
+  considerando orientación y márgenes.
+- [ ] Mostrar también la siguiente opción más holgada.
+- [x] Si no cabe en A0, indicar que requiere el modo Póster.
+- [x] Detectar unidades ambiguas: `55 × 75 mm` y `55 × 75 cm` deben producir
+  recomendaciones completamente distintas.
+- [x] Explicar el resultado: “55 × 75 cm cabe en A1 vertical; A2 es demasiado
+  pequeño”.
+- [ ] Mostrar el aprovechamiento porcentual y el espacio sobrante.
+
+##### Modo Póster
+
+- [ ] Definir el tamaño total terminado mediante preset ISO o ancho × alto.
+- [ ] Elegir el papel físico usado por la impresora, por ejemplo A4 o A3.
+- [ ] Calcular automáticamente columnas, filas y número total de hojas.
+- [ ] Permitir solapamiento configurable para pegar las partes.
+- [ ] Añadir líneas de corte, marcas de alineación y numeración de mosaicos.
+- [ ] Permitir borde blanco o impresión sin borde.
+- [ ] Optimizar automáticamente orientación del papel para usar menos hojas.
+- [ ] Generar un PDF multipágina en orden de montaje: izquierda a derecha y de
+  arriba hacia abajo.
+- [ ] Incluir opcionalmente una primera página con el mapa de armado.
+- [ ] Mostrar una previsualización del mosaico antes de exportar.
+
+Ejemplo esperado: una imagen terminada en A1 y papel de impresora A4 mostrará
+la cuadrícula necesaria, el solapamiento, el número de hojas y el orden de
+montaje antes de generar el PDF.
+
+##### Interfaz propuesta
+
+```text
+Exportar para impresión
+├── 1. Contenido: página actual / rango / todas
+├── 2. Tamaño final: DNI / foto / ISO / personalizado
+│   ├── Ancho × Alto + unidad
+│   └── Escala: 100% / 195% / personalizada
+├── 3. Distribución
+│   ├── Una por hoja
+│   ├── Llenar hoja
+│   └── Póster
+├── 4. Papel: recomendado / A0–A5 / personalizado
+├── 5. Márgenes, separación, sangrado y corte
+└── Vista previa: medidas, copias, hojas y advertencias
+```
+
+En móvil se presentará como pasos cortos. En PC, configuración a la derecha y
+vista previa de la hoja a la izquierda.
+
+##### Reglas de cálculo
+
+- [x] Realizar todos los cálculos internos en milímetros.
+- [x] Convertir unidades únicamente en la entrada y en la presentación.
+- [ ] Mantener la proporción bloqueada por defecto.
+- [x] Calcular copias con el área imprimible, no solo con el tamaño nominal del
+  papel.
+- [ ] Evaluar orientación normal y rotada para elegir la de mayor capacidad.
+- [x] No deformar imágenes por defecto; dejar margen o deformar son decisiones
+  explícitas.
+- [ ] Usar resolución objetivo configurable, con 300 DPI como preset de
+  impresión y advertencias cuando la imagen no tenga píxeles suficientes.
+- [ ] Redondear solo para mostrar; conservar precisión decimal internamente.
+
+##### Arquitectura y pruebas
+
+- [x] Crear `js/export/print-sizes.js` para tamaños ISO, unidades y presets.
+- [x] Crear `js/export/layout-calculator.js` para cuadrículas y recomendaciones.
+- [ ] Crear `js/export/poster.js` para dividir y numerar mosaicos.
+- [x] Mantener la lógica matemática separada del DOM y de jsPDF.
+- [x] Probar DNI al 100% y 195%.
+- [x] Probar 5×5 cm en A4 con margen y separación.
+- [x] Probar recomendación de 55×75 cm y su orientación.
+- [ ] Probar póster A1 sobre A4 y A3.
+- [ ] Probar unidades, rotación, redondeos y medidas imposibles.
+- [ ] Verificar con regla física una impresión real antes de darla por
+  terminada.
+
+##### Orden de implementación
+
+1. Motor puro de unidades, tamaños ISO y recomendación de papel.
+2. Tamaño personalizado y preset DNI con escala porcentual.
+3. Modos “Una por hoja” y “Llenar hoja”, con previsualización.
+4. Cantidad de copias, márgenes, separación y rotación automática.
+5. Modo Póster con mosaico, solapamiento y numeración.
+6. Marcas de corte, sangrado, mapa de montaje y presets personales.
+
+Los primeros tres puntos forman el MVP. Póster se implementará después de que
+las medidas impresas y la cuadrícula hayan sido verificadas físicamente.
+
+**Terminado cuando:**
+
+- El PDF conserva las medidas físicas solicitadas al imprimir al 100%.
+- El contador de copias coincide con la cuadrícula generada.
+- La recomendación nunca propone una hoja donde la pieza no cabe.
+- El póster se puede cortar y montar respetando la medida final.
+- La vista previa informa el resultado antes de descargar el archivo.
+
 - [ ] Crear presets: Documento, Impresión, Archivo ligero y Tamaño original.
 - [ ] Estimar el peso antes de exportar.
 - [ ] Mejorar compresión de PDF sin destruir texto fino.
@@ -259,6 +417,9 @@ js/
 ├── export/
 │   ├── pdf.js
 │   ├── images.js
+│   ├── print-sizes.js       # Unidades, ISO y presets físicos
+│   ├── layout-calculator.js # Copias por hoja y recomendación
+│   ├── poster.js            # División en mosaicos imprimibles
 │   └── share.js
 └── ui/
     ├── navigation.js

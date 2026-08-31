@@ -7,6 +7,8 @@
 import { Scanner } from './scanner.js';
 import { Corners } from './corners.js';
 import { fitImageDimensions, parsePageRange } from './utils.js';
+import { getPaperSize, recommendPaper, resolvePrintSize } from './export/print-sizes.js';
+import { calculateGrid, createPlacements } from './export/layout-calculator.js';
 
 const App = (() => {
   'use strict';
@@ -162,6 +164,23 @@ const App = (() => {
     dom.btnExportConfirm = document.getElementById('export-modal-confirm');
     dom.exportPageRange = document.getElementById('export-page-range');
     dom.exportPageSize = document.getElementById('export-page-size');
+    dom.exportPurpose = document.getElementById('export-purpose');
+    dom.groupExportPurpose = document.getElementById('group-export-purpose');
+    dom.groupPrintLayout = document.getElementById('group-print-layout');
+    dom.exportLayoutMode = document.getElementById('export-layout-mode');
+    dom.exportPrintPreset = document.getElementById('export-print-preset');
+    dom.groupCustomPrintSize = document.getElementById('group-custom-print-size');
+    dom.exportPrintWidth = document.getElementById('export-print-width');
+    dom.exportPrintHeight = document.getElementById('export-print-height');
+    dom.exportPrintUnit = document.getElementById('export-print-unit');
+    dom.exportPrintScale = document.getElementById('export-print-scale');
+    dom.exportPrintMargin = document.getElementById('export-print-margin');
+    dom.exportPrintGap = document.getElementById('export-print-gap');
+    dom.exportPrintCopies = document.getElementById('export-print-copies');
+    dom.groupPrintGap = document.getElementById('group-print-gap');
+    dom.groupPrintCopies = document.getElementById('group-print-copies');
+    dom.printLayoutSummary = document.getElementById('print-layout-summary');
+    dom.exportPageSizeAuto = document.getElementById('export-page-size-auto');
     dom.exportFitOptions = document.querySelectorAll('input[name="export-fit"]');
     dom.exportOrientationOptions = document.querySelectorAll('input[name="export-orientation"]');
     dom.exportFormatOptions = document.querySelectorAll('input[name="export-format"]');
@@ -299,9 +318,31 @@ const App = (() => {
     dom.exportFormatOptions.forEach(opt => {
       opt.addEventListener('change', updateExportModalUi);
     });
+    dom.exportOrientationOptions.forEach(opt => {
+      opt.addEventListener('change', updateExportModalUi);
+    });
     if (dom.exportPageSize) {
       dom.exportPageSize.addEventListener('change', updateExportModalUi);
     }
+    dom.exportPurpose?.addEventListener('change', () => {
+      dom.exportPageSize.value = dom.exportPurpose.value === 'print' ? 'auto' : 'A4';
+      updateExportModalUi();
+    });
+    [
+      dom.exportPurpose,
+      dom.exportLayoutMode,
+      dom.exportPrintPreset,
+      dom.exportPrintWidth,
+      dom.exportPrintHeight,
+      dom.exportPrintUnit,
+      dom.exportPrintScale,
+      dom.exportPrintMargin,
+      dom.exportPrintGap,
+      dom.exportPrintCopies
+    ].forEach(control => {
+      control?.addEventListener('input', updateExportModalUi);
+      control?.addEventListener('change', updateExportModalUi);
+    });
 
     // Tab controls
     dom.btnAddTab.addEventListener('click', addNewTab);
@@ -1987,15 +2028,31 @@ const App = (() => {
     let format = 'pdf';
     dom.exportFormatOptions.forEach(opt => { if (opt.checked) format = opt.value; });
 
+    const purpose = dom.exportPurpose?.value || 'document';
+    const isPrintLayout = format === 'pdf' && purpose === 'print';
+    if (purpose === 'print' && dom.exportPageSize?.value === 'original') {
+      dom.exportPageSize.value = 'auto';
+    }
+    if (!isPrintLayout && dom.exportPageSize?.value === 'auto') {
+      dom.exportPageSize.value = 'A4';
+    }
     const pageSize = dom.exportPageSize ? dom.exportPageSize.value : 'A4';
     const isOriginal = pageSize === 'original';
 
     // Show/hide groups
     if (format === 'pdf') {
       dom.groupImageMethod.classList.add('hidden');
+      dom.groupExportPurpose.classList.remove('hidden');
     } else {
       dom.groupImageMethod.classList.remove('hidden');
+      dom.groupExportPurpose.classList.add('hidden');
     }
+    dom.groupPrintLayout.classList.toggle('hidden', !isPrintLayout);
+    dom.exportPageSizeAuto.disabled = !isPrintLayout;
+    dom.groupCustomPrintSize.classList.toggle('hidden', dom.exportPrintPreset.value !== 'custom');
+    const fillMode = dom.exportLayoutMode.value === 'fill';
+    dom.groupPrintGap.classList.toggle('hidden', !fillMode);
+    dom.groupPrintCopies.classList.toggle('hidden', !fillMode);
 
     if (isOriginal) {
       dom.groupImageFit.classList.add('hidden');
@@ -2005,9 +2062,101 @@ const App = (() => {
       dom.groupOrientation.classList.remove('hidden');
     }
 
+    if (isPrintLayout) updatePrintLayoutSummary();
+
     const confirmText = document.getElementById('export-confirm-text');
     if (confirmText) {
       confirmText.textContent = format === 'pdf' ? 'Generar PDF' : 'Descargar';
+    }
+  }
+
+  function readOrientationMode() {
+    let orientationMode = 'auto';
+    dom.exportOrientationOptions.forEach(option => {
+      if (option.checked) orientationMode = option.value;
+    });
+    return orientationMode;
+  }
+
+  function buildPrintConfiguration() {
+    const item = resolvePrintSize({
+      preset: dom.exportPrintPreset.value,
+      width: dom.exportPrintWidth.value,
+      height: dom.exportPrintHeight.value,
+      unit: dom.exportPrintUnit.value,
+      scale: dom.exportPrintScale.value
+    });
+    const margin = Number(dom.exportPrintMargin.value);
+    const gap = Number(dom.exportPrintGap.value);
+    const requestedPaper = dom.exportPageSize.value;
+    const orientationMode = readOrientationMode();
+    let paper;
+
+    if (requestedPaper === 'auto') {
+      paper = recommendPaper(item.width, item.height, margin);
+      if (!paper) throw new RangeError('La medida no cabe en A0. Usa el futuro modo Póster.');
+    } else {
+      const landscape = orientationMode === 'landscape';
+      if (orientationMode === 'auto') {
+        const portrait = getPaperSize(requestedPaper, false);
+        const landscapePaper = getPaperSize(requestedPaper, true);
+        const portraitLayout = calculateGrid({
+          paper: portrait,
+          itemWidth: item.width,
+          itemHeight: item.height,
+          margin,
+          gap,
+          allowRotate: false
+        });
+        const landscapeLayout = calculateGrid({
+          paper: landscapePaper,
+          itemWidth: item.width,
+          itemHeight: item.height,
+          margin,
+          gap,
+          allowRotate: false
+        });
+        paper = landscapeLayout.capacity > portraitLayout.capacity ? landscapePaper : portrait;
+      } else {
+        paper = getPaperSize(requestedPaper, landscape);
+      }
+    }
+
+    const layout = calculateGrid({
+      paper,
+      itemWidth: item.width,
+      itemHeight: item.height,
+      margin,
+      gap,
+      allowRotate: false
+    });
+    if (layout.capacity === 0) {
+      const recommendation = recommendPaper(item.width, item.height, margin);
+      const message = recommendation
+        ? `La pieza no cabe. Prueba ${recommendation.name} ${recommendation.landscape ? 'horizontal' : 'vertical'}.`
+        : 'La pieza no cabe en A0. Usa el futuro modo Póster.';
+      throw new RangeError(message);
+    }
+
+    const copies = Math.max(0, Number.parseInt(dom.exportPrintCopies.value || '0', 10));
+    return { item, paper, layout, copies, mode: dom.exportLayoutMode.value };
+  }
+
+  function updatePrintLayoutSummary() {
+    try {
+      const config = buildPrintConfiguration();
+      const capacity = config.mode === 'single' ? 1 : config.layout.capacity;
+      const copies = config.mode === 'single' ? 1 : (config.copies || capacity);
+      const sheets = Math.max(1, Math.ceil(copies / capacity));
+      const gridLabel = config.mode === 'single'
+        ? 'una pieza centrada'
+        : `${config.layout.columns} columna(s) × ${config.layout.rows} fila(s)`;
+      dom.printLayoutSummary.innerHTML =
+        `<strong>${config.item.width.toFixed(2)} × ${config.item.height.toFixed(2)} mm</strong><br>` +
+        `${config.paper.name} ${config.paper.landscape ? 'horizontal' : 'vertical'} · ` +
+        `${gridLabel} · ${capacity} por hoja · ${copies} copia(s) · ${sheets} hoja(s)`;
+    } catch (error) {
+      dom.printLayoutSummary.textContent = error.message || 'Completa las medidas para calcular la impresión.';
     }
   }
 
@@ -2052,6 +2201,11 @@ const App = (() => {
           return;
         }
         pagesToExport = indices.map(i => tab.scannedPages[i]);
+      }
+
+      if ((dom.exportPurpose?.value || 'document') === 'print') {
+        await generatePrintPdf(pagesToExport);
+        return;
       }
 
       showToast('Generando PDF, por favor espera...', 'info');
@@ -2187,6 +2341,93 @@ const App = (() => {
       console.error('[App] PDF generation error:', err);
       showToast('Error al generar PDF.', 'error');
     }
+  }
+
+  function addImageToPrintBox(pdf, page, box, fitMode) {
+    if (fitMode === 'cover') {
+      pdf.addImage(page.dataUrl, 'JPEG', box.x, box.y, box.width, box.height, undefined, 'FAST');
+      return;
+    }
+    const imageRatio = page.width / page.height;
+    const boxRatio = box.width / box.height;
+    let width = box.width;
+    let height = box.height;
+    let x = box.x;
+    let y = box.y;
+    if (imageRatio > boxRatio) {
+      height = width / imageRatio;
+      y += (box.height - height) / 2;
+    } else {
+      width = height * imageRatio;
+      x += (box.width - width) / 2;
+    }
+    pdf.addImage(page.dataUrl, 'JPEG', x, y, width, height, undefined, 'FAST');
+  }
+
+  async function saveGeneratedPdf(pdf, fileName) {
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: 'Documento PDF', accept: { 'application/pdf': ['.pdf'] } }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(pdf.output('blob'));
+        await writable.close();
+        showToast('PDF de impresión guardado', 'success');
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+      }
+    }
+    pdf.save(fileName);
+    showToast('PDF de impresión descargado', 'success');
+  }
+
+  async function generatePrintPdf(pagesToExport) {
+    const config = buildPrintConfiguration();
+    const { jsPDF } = window.jspdf;
+    const fitMode = Array.from(dom.exportFitOptions).find(option => option.checked)?.value || 'contain';
+    const orientation = config.paper.landscape ? 'landscape' : 'portrait';
+    const capacity = config.mode === 'single' ? 1 : config.layout.capacity;
+    const copiesPerSource = config.mode === 'single' ? 1 : (config.copies || capacity);
+    let pdf = null;
+
+    showToast('Componiendo PDF con medidas físicas…', 'info');
+    const addSheet = () => {
+      if (!pdf) {
+        pdf = new jsPDF({
+          orientation,
+          unit: 'mm',
+          format: [config.paper.width, config.paper.height],
+          compress: true
+        });
+      } else {
+        pdf.addPage([config.paper.width, config.paper.height], orientation);
+      }
+    };
+
+    for (const page of pagesToExport) {
+      let remaining = copiesPerSource;
+      while (remaining > 0) {
+        addSheet();
+        const count = Math.min(capacity, remaining);
+        const placements = config.mode === 'single'
+          ? [{
+              x: (config.paper.width - config.item.width) / 2,
+              y: (config.paper.height - config.item.height) / 2,
+              width: config.item.width,
+              height: config.item.height
+            }]
+          : createPlacements(config.layout, count);
+        placements.forEach(box => addImageToPrintBox(pdf, page, box, fitMode));
+        remaining -= count;
+      }
+    }
+
+    if (!pdf) throw new Error('No hay páginas para componer');
+    const sizeLabel = `${config.item.width.toFixed(1)}x${config.item.height.toFixed(1)}mm`;
+    await saveGeneratedPdf(pdf, `pablito-leans-impresion-${sizeLabel}-${Date.now()}.pdf`);
   }
 
   async function generateImages() {

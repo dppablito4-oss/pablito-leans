@@ -88,3 +88,21 @@ test('manual adjustment starts neutral and uses a soft blend curve', async () =>
   assert.match(scanner, /Math\.pow\(bgCleanVal \/ 100, 2\) \* 0\.7/);
   assert.match(scanner, /satVal !== 50/);
 });
+
+test('print composition UI and offline cache include physical layout tools', async () => {
+  const html = await readFile(resolve(root, 'index.html'), 'utf8');
+  const serviceWorker = await readFile(resolve(root, 'sw.js'), 'utf8');
+  for (const id of [
+    'export-purpose',
+    'export-layout-mode',
+    'export-print-preset',
+    'export-print-width',
+    'export-print-height',
+    'export-print-scale',
+    'print-layout-summary'
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(serviceWorker, /js\/export\/print-sizes\.js/);
+  assert.match(serviceWorker, /js\/export\/layout-calculator\.js/);
+});

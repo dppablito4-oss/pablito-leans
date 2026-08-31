@@ -343,10 +343,69 @@
           <input type="text" id="export-page-range" class="form-input" placeholder="Ej: 1-3, 5 (Vacío = Todas)">
         </div>
 
+        <!-- Print Composition -->
+        <div class="form-group" id="group-export-purpose">
+          <label for="export-purpose">Tipo de salida PDF</label>
+          <select id="export-purpose" class="form-select">
+            <option value="document" selected>Documento normal</option>
+            <option value="print">Composición para impresión</option>
+          </select>
+        </div>
+
+        <div class="print-layout-settings hidden" id="group-print-layout">
+          <div class="form-group">
+            <label for="export-layout-mode">Distribución</label>
+            <select id="export-layout-mode" class="form-select">
+              <option value="single">Una por hoja</option>
+              <option value="fill">Llenar hoja con copias</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="export-print-preset">Tamaño físico de cada pieza</label>
+            <select id="export-print-preset" class="form-select">
+              <option value="dni">DNI / tarjeta (85.6 × 54 mm)</option>
+              <option value="photo3x4">Foto 3 × 4 cm</option>
+              <option value="photo4x4">Foto 4 × 4 cm</option>
+              <option value="square5">Cuadrado 5 × 5 cm</option>
+              <option value="custom">Medida personalizada</option>
+            </select>
+          </div>
+
+          <div class="custom-size-row hidden" id="group-custom-print-size">
+            <label>Ancho <input type="number" id="export-print-width" class="form-input" min="0.1" step="0.1" value="5"></label>
+            <span>×</span>
+            <label>Alto <input type="number" id="export-print-height" class="form-input" min="0.1" step="0.1" value="5"></label>
+            <select id="export-print-unit" class="form-select" aria-label="Unidad de medida">
+              <option value="mm">mm</option>
+              <option value="cm" selected>cm</option>
+              <option value="in">pulgadas</option>
+            </select>
+          </div>
+
+          <div class="print-options-grid">
+            <label>Escala
+              <span class="input-suffix"><input type="number" id="export-print-scale" class="form-input" min="1" max="1000" step="1" value="100"><span>%</span></span>
+            </label>
+            <label>Margen
+              <span class="input-suffix"><input type="number" id="export-print-margin" class="form-input" min="0" max="100" step="0.5" value="10"><span>mm</span></span>
+            </label>
+            <label id="group-print-gap">Separación
+              <span class="input-suffix"><input type="number" id="export-print-gap" class="form-input" min="0" max="100" step="0.5" value="3"><span>mm</span></span>
+            </label>
+            <label id="group-print-copies">Copias (0 = llenar una hoja)
+              <input type="number" id="export-print-copies" class="form-input" min="0" max="1000" step="1" value="0" title="0 llena una hoja">
+            </label>
+          </div>
+
+          <div class="print-layout-summary" id="print-layout-summary" aria-live="polite"></div>
+        </div>
+
         <!-- Page Size -->
         <div class="form-group" id="group-page-size">
           <label for="export-page-size">Tamaño de Hoja / Lienzo</label>
           <select id="export-page-size" class="form-select">
+            <option value="auto" id="export-page-size-auto">Recomendado automáticamente</option>
             <option value="A4" selected>A4 (210 × 297 mm)</option>
             <option value="A5">A5 (148 × 210 mm)</option>
             <option value="A3">A3 (297 × 420 mm)</option>

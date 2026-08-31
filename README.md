@@ -16,6 +16,8 @@ Herramienta web estática que permite escanear documentos directamente desde el 
 - 👁️ **Comparación antes/después** manteniendo pulsada la vista previa
 - 📚 **Flujo por etapas** optimizado para móvil y vista de dos columnas en PC
 - 📥 **Exportación** a PDF, JPG y ZIP con selección de páginas
+- 📐 **Composición de impresión** con DNI, escala 195%, medidas personalizadas,
+  recomendación A0–A5 y cuadrículas de varias copias
 - 📱 **Responsive** y compatible con cámaras de celular
 - 🔒 **Procesamiento local** — los documentos no se suben a un servidor
 - ⌨️ **Accesible por teclado** — pestañas, diálogos y ajuste fino de esquinas
