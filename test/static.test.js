@@ -60,6 +60,7 @@ test('mobile scan flow exposes camera, core filters and comparison controls', as
     'btn-page-left',
     'btn-page-right',
     'flow-nav',
+    'filter-original',
     'filter-auto',
     'filter-document',
     'filter-whiteboard',
@@ -71,6 +72,16 @@ test('mobile scan flow exposes camera, core filters and comparison controls', as
   assert.match(app, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(app, /cameraStream\?\.getTracks\(\)\.forEach\(track => track\.stop\(\)\)/);
   assert.match(scanner, /case 'auto':/);
+  assert.match(scanner, /case 'original':/);
+});
+
+test('new scans default to the uncorrected Original filter', async () => {
+  const html = await readFile(resolve(root, 'index.html'), 'utf8');
+  const app = await readFile(resolve(root, 'js/app.js'), 'utf8');
+  assert.match(html, /class="filter-option active" data-filter="original"/);
+  assert.match(app, /currentFilter: 'original'/);
+  assert.match(app, /Scanner\.applyFilter\(warpedMat, targetFilter\)/);
+  assert.match(app, /: 'original';/);
 });
 
 test('local PDFs are passed to PDF.js as bytes instead of blob URLs', async () => {

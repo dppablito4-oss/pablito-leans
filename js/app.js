@@ -53,7 +53,7 @@ const App = (() => {
       state: 'upload',
       scannedPages: [],
       activePageIndex: -1,
-      currentFilter: 'auto',
+      currentFilter: 'original',
       originalImageDataUrl: null,
       isReAdjusting: false,
       corners: null,
@@ -1014,7 +1014,7 @@ const App = (() => {
           let filtered = null;
           try {
             mat = cv.imread(canvas);
-            filtered = Scanner.applyFilter(mat, 'auto');
+            filtered = Scanner.applyFilter(mat, 'original');
             
             Scanner.drawToCanvas(filtered, outCanvas);
             
@@ -1033,7 +1033,7 @@ const App = (() => {
               dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
               width: outCanvas.width,
               height: outCanvas.height,
-              filter: 'auto',
+              filter: 'original',
               isPdf: true
             };
             if (!appendPage(tab, pageData)) {
@@ -1195,7 +1195,7 @@ const App = (() => {
     let filtered = null;
     try {
       warped = Scanner.warpPerspective(mat, detectedPoints);
-      filtered = Scanner.applyFilter(warped, 'auto');
+      filtered = Scanner.applyFilter(warped, 'original');
 
       const outCanvas = document.createElement('canvas');
       Scanner.drawToCanvas(filtered, outCanvas);
@@ -1212,7 +1212,7 @@ const App = (() => {
         dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
         width: outCanvas.width,
         height: outCanvas.height,
-        filter: 'auto'
+        filter: 'original'
       };
       return appendPage(tab, pageData);
     } finally {
@@ -1461,7 +1461,7 @@ const App = (() => {
       if (warpedMat) warpedMat.delete();
       warpedMat = Scanner.warpPerspective(originalMat, cornerPoints);
 
-      const targetFilter = tab.isReAdjusting ? tab.scannedPages[tab.activePageIndex].filter : 'auto';
+      const targetFilter = tab.isReAdjusting ? tab.scannedPages[tab.activePageIndex].filter : 'original';
       
       filtered = Scanner.applyFilter(warpedMat, targetFilter);
       Scanner.drawToCanvas(filtered, dom.canvasOutput);
@@ -1943,9 +1943,9 @@ const App = (() => {
 
   function resetFilterUI() {
     const tab = currentTab();
-    if (tab) tab.currentFilter = 'auto';
+    if (tab) tab.currentFilter = 'original';
     dom.filterBtns.forEach(b => b.classList.remove('active'));
-    document.getElementById('filter-auto').classList.add('active');
+    document.getElementById('filter-original').classList.add('active');
   }
 
     // ======== Export & Download ========

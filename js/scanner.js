@@ -186,6 +186,8 @@
    */
   function applyFilter(src, mode, options = {}) {
     switch (mode) {
+      case 'original':
+        return filterOriginal(src);
       case 'auto':
         return filterAuto(src);
       case 'manual':
@@ -206,6 +208,15 @@
       default:
         return filterColor(src);
     }
+  }
+
+  // ---- Filter: Original ----
+  // Exact visual pass-through: perspective correction remains, but color,
+  // contrast, brightness and saturation are not modified.
+  function filterOriginal(src) {
+    const result = new cv.Mat();
+    src.copyTo(result);
+    return result;
   }
 
   // ---- Filter: Auto ----

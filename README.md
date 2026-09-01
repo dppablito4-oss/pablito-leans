@@ -12,7 +12,7 @@ Herramienta web estática que permite escanear documentos directamente desde el 
 - 📷 **Cámara manual integrada** con cámara trasera, cambio de lente y linterna compatible
 - 🎯 **Ajuste manual de esquinas** con nodos arrastrables (mouse y touch)
 - 🔄 **Transformación de perspectiva** para aplanar documentos
-- 🎨 **Cuatro filtros principales**: Auto, Documento, Pizarra y Color
+- 🎨 **Original sin corrección** y filtros opcionales Auto, Documento, Pizarra y Color
 - 👁️ **Comparación antes/después** manteniendo pulsada la vista previa
 - 📚 **Flujo por etapas** optimizado para móvil y vista de dos columnas en PC
 - 📥 **Exportación** a PDF, JPG y ZIP con selección de páginas
