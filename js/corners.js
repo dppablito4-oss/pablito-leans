@@ -1,9 +1,11 @@
 /**
  * corners.js — Interactive Corner Handle System
- * Manages 4 draggable corner nodes on a canvas overlay for manual document edge adjustment.
+ * Four perspective corners plus horizontal and vertical edge handles.
  */
 
 
+
+import { cropHandlePositions, moveCropHandle, rectangleFromPoints } from './crop-geometry.js';
 
   // State
   let overlayCanvas = null;
@@ -16,6 +18,9 @@
   let stateScaleY = 1;
   let stateImageWidth = 0;
   let stateImageHeight = 0;
+  let cropMode = 'perspective';
+  let dragStart = null;
+  let dragPoints = null;
 
   // Config
   const HANDLE_RADIUS = 14;
@@ -39,7 +44,8 @@
    * @param {number} imageWidth - Original image width
    * @param {number} imageHeight - Original image height
    */
-  function init(overlay, initialPoints, displayWidth, displayHeight, imageWidth, imageHeight) {
+  function init(overlay, initialPoints, displayWidth, displayHeight, imageWidth, imageHeight, mode = 'perspective') {
+    destroy();
     overlayCanvas = overlay;
     overlayCanvas.width = displayWidth;
     overlayCanvas.height = displayHeight;
@@ -68,11 +74,15 @@
       ];
     }
 
+    cropMode = mode;
+    if (mode === 'rectangle') points = rectangleFromPoints(points);
+
     // Bind events
     overlayCanvas.addEventListener('pointerdown', onPointerDown);
     overlayCanvas.addEventListener('pointermove', onPointerMove);
     overlayCanvas.addEventListener('pointerup', onPointerUp);
     overlayCanvas.addEventListener('pointercancel', onPointerUp);
+    overlayCanvas.addEventListener('lostpointercapture', onPointerUp);
     overlayCanvas.addEventListener('keydown', onKeyDown);
     overlayCanvas.addEventListener('focus', onCanvasFocus);
     overlayCanvas.style.touchAction = 'none'; // Prevent scroll on touch
@@ -104,11 +114,14 @@
     overlayCanvas.removeEventListener('pointermove', onPointerMove);
     overlayCanvas.removeEventListener('pointerup', onPointerUp);
     overlayCanvas.removeEventListener('pointercancel', onPointerUp);
+    overlayCanvas.removeEventListener('lostpointercapture', onPointerUp);
     overlayCanvas.removeEventListener('keydown', onKeyDown);
     overlayCanvas.removeEventListener('focus', onCanvasFocus);
     points = [];
     activePointIndex = -1;
     isDragging = false;
+    dragStart = null;
+    dragPoints = null;
     if (ctx) {
       ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     }
@@ -127,23 +140,26 @@
   }
 
   function hitTest(pos) {
-    for (let i = 0; i < points.length; i++) {
-      const dx = pos.x - points[i].x;
-      const dy = pos.y - points[i].y;
-      if (Math.sqrt(dx * dx + dy * dy) <= HIT_RADIUS) {
-        return i;
-      }
+    const handles = cropHandlePositions(points);
+    let best = -1;
+    let distance = HIT_RADIUS * (overlayCanvas.width / canvasRect.width);
+    for (let index = 0; index < handles.length; index++) {
+      const candidate = Math.hypot(pos.x - handles[index].x, pos.y - handles[index].y);
+      if (candidate < distance) { best = index; distance = candidate; }
     }
-    return -1;
+    return best;
   }
 
   function onPointerDown(e) {
     e.preventDefault();
-    overlayCanvas.setPointerCapture(e.pointerId);
     const pos = getPointerPos(e);
     activePointIndex = hitTest(pos);
     if (activePointIndex >= 0) {
+      overlayCanvas.focus({ preventScroll: true });
+      overlayCanvas.setPointerCapture(e.pointerId);
       isDragging = true;
+      dragStart = pos;
+      dragPoints = points.map(point => ({ ...point }));
       updateAriaLabel();
       draw();
     }
@@ -155,15 +171,15 @@
       // Update cursor
       const pos = getPointerPos(e);
       const hit = hitTest(pos);
-      overlayCanvas.style.cursor = hit >= 0 ? 'grab' : 'crosshair';
+      overlayCanvas.style.cursor = hit >= 4 ? (hit % 2 ? 'ew-resize' : 'ns-resize') : hit >= 0 ? 'grab' : 'crosshair';
       return;
     }
 
     const pos = getPointerPos(e);
 
-    // Clamp to canvas bounds
-    points[activePointIndex].x = Math.max(0, Math.min(pos.x, overlayCanvas.width));
-    points[activePointIndex].y = Math.max(0, Math.min(pos.y, overlayCanvas.height));
+    const moved = moveCropHandle(dragPoints, activePointIndex, pos.x - dragStart.x, pos.y - dragStart.y,
+      overlayCanvas.width, overlayCanvas.height, cropMode);
+    if (moved !== dragPoints) points = moved;
 
     updateAriaLabel();
     draw();
@@ -178,7 +194,7 @@
   function onKeyDown(e) {
     if (!overlayCanvas || points.length !== 4) return;
 
-    if (/^[1-4]$/.test(e.key)) {
+    if (/^[1-8]$/.test(e.key)) {
       e.preventDefault();
       activePointIndex = Number(e.key) - 1;
       updateAriaLabel();
@@ -190,13 +206,9 @@
     e.preventDefault();
     if (activePointIndex < 0) activePointIndex = 0;
     const step = e.shiftKey ? 10 : 1;
-    const point = points[activePointIndex];
-    if (e.key === 'ArrowLeft') point.x -= step;
-    if (e.key === 'ArrowRight') point.x += step;
-    if (e.key === 'ArrowUp') point.y -= step;
-    if (e.key === 'ArrowDown') point.y += step;
-    point.x = Math.max(0, Math.min(point.x, overlayCanvas.width));
-    point.y = Math.max(0, Math.min(point.y, overlayCanvas.height));
+    const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+    const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+    points = moveCropHandle(points, activePointIndex, dx, dy, overlayCanvas.width, overlayCanvas.height, cropMode);
     updateAriaLabel();
     draw();
   }
@@ -204,18 +216,20 @@
   function updateAriaLabel() {
     if (!overlayCanvas || points.length !== 4) return;
     const pointIndex = activePointIndex >= 0 ? activePointIndex : 0;
-    const names = ['superior izquierda', 'superior derecha', 'inferior derecha', 'inferior izquierda'];
-    const point = points[pointIndex];
+    const names = ['esquina superior izquierda', 'esquina superior derecha', 'esquina inferior derecha', 'esquina inferior izquierda',
+      'borde superior', 'borde derecho', 'borde inferior', 'borde izquierdo'];
+    const point = cropHandlePositions(points)[pointIndex];
     overlayCanvas.setAttribute(
       'aria-label',
-      `Ajuste de esquinas. Esquina ${names[pointIndex]}, posición ${Math.round(point.x)}, ${Math.round(point.y)}.`
+      `Recorte ${cropMode === 'rectangle' ? 'rectangular' : 'con perspectiva'}. ${names[pointIndex]}, posición ${Math.round(point.x)}, ${Math.round(point.y)}.`
     );
   }
 
   function onPointerUp(e) {
     if (isDragging) {
       isDragging = false;
-      activePointIndex = -1;
+      dragStart = null;
+      dragPoints = null;
       overlayCanvas.style.cursor = 'crosshair';
       draw();
     }
@@ -238,6 +252,39 @@
 
     // 3. Draw corner handles
     drawHandles();
+    drawEdgeHandles();
+  }
+
+  function setMode(mode) {
+    cropMode = mode === 'rectangle' ? 'rectangle' : 'perspective';
+    if (cropMode === 'rectangle') points = rectangleFromPoints(points);
+    updateAriaLabel();
+    draw();
+  }
+
+  function reset() {
+    if (!overlayCanvas) return;
+    points = [{ x: 0, y: 0 }, { x: overlayCanvas.width, y: 0 },
+      { x: overlayCanvas.width, y: overlayCanvas.height }, { x: 0, y: overlayCanvas.height }];
+    activePointIndex = 0;
+    updateAriaLabel();
+    draw();
+  }
+
+  function drawEdgeHandles() {
+    const handles = cropHandlePositions(points).slice(4);
+    handles.forEach((point, edge) => {
+      ctx.save();
+      ctx.translate(point.x, point.y);
+      const horizontal = edge % 2 === 0;
+      ctx.fillStyle = activePointIndex === edge + 4 ? '#ffffff' : ACCENT;
+      ctx.strokeStyle = '#07333d';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(horizontal ? -18 : -6, horizontal ? -6 : -18, horizontal ? 36 : 12, horizontal ? 12 : 36, 5);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    });
   }
 
   function drawOverlayMask(w, h) {
@@ -317,6 +364,9 @@
   export const Corners = {
     init,
     getPoints,
+    setMode,
+    getMode: () => cropMode,
+    reset,
     destroy,
     draw
   };

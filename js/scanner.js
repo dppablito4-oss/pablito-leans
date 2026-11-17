@@ -5,6 +5,8 @@
 
 
 
+import { adjustTonePixels, hasAdjustments, normalizeAdjustments } from './image-adjustments.js';
+
   /**
    * Detect the largest quadrilateral contour in the image.
    * Returns an array of 4 points [{x, y}, ...] sorted TL, TR, BR, BL.
@@ -185,13 +187,24 @@
    * @returns {cv.Mat} Filtered image (RGBA)
    */
   function applyFilter(src, mode, options = {}) {
+    if (mode === 'manual') return filterManual(src, options);
+    const base = applyBaseFilter(src, mode);
+    if (!hasAdjustments(options)) return base;
+    try {
+      return filterManual(base, options);
+    } finally {
+      base.delete();
+    }
+  }
+
+  function applyBaseFilter(src, mode) {
     switch (mode) {
       case 'original':
         return filterOriginal(src);
       case 'auto':
         return filterAuto(src);
       case 'manual':
-        return filterManual(src, options);
+        return filterManual(src, {});
       case 'document':
         return filterDocument(src);
       case 'whiteboard':
@@ -223,15 +236,14 @@
   // A conservative default: evens out lighting and gently restores color
   // without the aggressive channel stretching used by the Color preset.
   function filterAuto(src) {
-    return filterManual(src, { bgClean: 38, saturation: 56 });
+    return filterManual(src, { bgClean: 38, saturation: 56, brightness: 4, whiteBalance: 55 });
   }
 
   // ---- Filter: Manual (Custom Background Clean & Saturation) ----
   function filterManual(src, options) {
-    const parsedBgClean = Number.parseFloat(options.bgClean);
-    const parsedSaturation = Number.parseFloat(options.saturation);
-    const bgCleanVal = Number.isFinite(parsedBgClean) ? Math.min(100, Math.max(0, parsedBgClean)) : 0;
-    const satVal = Number.isFinite(parsedSaturation) ? Math.min(100, Math.max(0, parsedSaturation)) : 50;
+    const settings = normalizeAdjustments(options);
+    const bgCleanVal = settings.bgClean;
+    const satVal = settings.saturation;
 
     const rgb = new cv.Mat();
     cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
@@ -280,6 +292,15 @@
       cleaned.copyTo(result);
     }
 
+    adjustTonePixels(result.data, settings);
+    if (settings.sharpness > 0) {
+      const blurred = new cv.Mat();
+      try {
+        cv.GaussianBlur(result, blurred, new cv.Size(0, 0), 1.1);
+        const amount = settings.sharpness / 100 * 0.6;
+        cv.addWeighted(result, 1 + amount, blurred, -amount, 0, result);
+      } finally { blurred.delete(); }
+    }
     const rgba = new cv.Mat();
     cv.cvtColor(result, rgba, cv.COLOR_RGB2RGBA);
 
@@ -290,7 +311,7 @@
   // ---- Filter: Color (Enhanced) ----
   // Keeps hues natural while gently correcting uneven illumination.
   function filterColor(src) {
-    const corrected = filterManual(src, { bgClean: 30, saturation: 64 });
+    const corrected = filterManual(src, { bgClean: 30, saturation: 64, brightness: 3, contrast: 3, whiteBalance: 65 });
     const blurred = new cv.Mat();
     cv.GaussianBlur(corrected, blurred, new cv.Size(0, 0), 1.2);
     const result = new cv.Mat();

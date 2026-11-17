@@ -80,7 +80,7 @@ test('new scans default to the uncorrected Original filter', async () => {
   const app = await readFile(resolve(root, 'js/app.js'), 'utf8');
   assert.match(html, /class="filter-option active" data-filter="original"/);
   assert.match(app, /currentFilter: 'original'/);
-  assert.match(app, /Scanner\.applyFilter\(warpedMat, targetFilter\)/);
+  assert.match(app, /Scanner\.applyFilter\(warpedMat, targetFilter, options\)/);
   assert.match(app, /: 'original';/);
 });
 

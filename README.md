@@ -14,8 +14,14 @@ Herramienta web estática que permite escanear documentos directamente desde el 
 - 🔄 **Transformación de perspectiva** para aplanar documentos
 - 🎨 **Original sin corrección** y filtros opcionales Auto, Documento, Pizarra y Color
 - 👁️ **Comparación antes/después** manteniendo pulsada la vista previa
+- 🗃️ **Visor de páginas** con miniaturas, zoom, navegación y vista continua
+- ✂️ **Recorte con ocho tiradores**: cuatro esquinas de perspectiva y cuatro
+  bordes para cortar vertical u horizontalmente, con modo rectangular
+- 🎛️ **Ajustes por página** de luz, contraste, fondo, saturación, balance de
+  blancos, temperatura y nitidez; se conservan al recortar y pueden aplicarse a todas
 - 📚 **Flujo por etapas** optimizado para móvil y vista de dos columnas en PC
 - 📥 **Exportación** a PDF, JPG y ZIP con selección de páginas
+  mediante el administrador de descargas del navegador
 - 📐 **Composición de impresión** con DNI, escala 195%, medidas personalizadas,
   recomendación A0–A5, vista previa de cada hoja y cuadrículas de varias copias
 - 🗂️ **Rellenado por página o por archivo**: repite cada original en su propia hoja
@@ -99,6 +105,24 @@ La vista previa permite recorrer las hojas y muestra el total real del archivo
 exportado. Sus números y guías no se imprimen. Elige **tamaño real / 100%** en el
 diálogo de impresión para conservar las medidas. La composición se exporta en
 PDF; la descarga de imágenes conserva su funcionamiento habitual.
+
+## Editar y descargar
+
+Las miniaturas de la izquierda permiten seleccionar y ordenar las páginas.
+El selector **Todas las páginas** muestra el documento completo; **Una página**
+permite revisar el detalle con zoom. Los ajustes de **Luz y limpieza** y
+**Color y nitidez** afectan a la página seleccionada, conservan el original y se
+mantienen al volver a recortar. **Restablecer** elimina los ajustes adicionales;
+**Original** también quita el filtro. Puedes copiar el acabado a todo el documento.
+
+En **Recortar**, arrastra las esquinas para corregir perspectiva o los tiradores
+del centro de cada borde para cortar desde arriba, abajo, izquierda o derecha.
+**Rectangular** mantiene los lados alineados. En el lienzo, las teclas 1–4
+seleccionan esquinas y 5–8 seleccionan bordes; usa flechas o Mayús + flecha.
+
+PDF, JPG y ZIP se envían a las **descargas del navegador**. La ubicación y la
+visualización de la barra de descargas siguen las preferencias del navegador;
+la aplicación ya no guarda los archivos directamente con el selector del sistema.
 
 ## 📜 Licencia
 

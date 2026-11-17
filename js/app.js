@@ -9,6 +9,8 @@ import { Corners } from './corners.js';
 import { fitImageDimensions, parsePageRange } from './utils.js';
 import { resolvePrintSize } from './export/print-sizes.js';
 import { createPrintPlan, fitImageToBox } from './export/layout-calculator.js';
+import { downloadBlob } from './export/download.js';
+import { NEUTRAL_ADJUSTMENTS, normalizeAdjustments } from './image-adjustments.js';
 
 const App = (() => {
   'use strict';
@@ -50,6 +52,8 @@ const App = (() => {
   let previewRevision = 0;
   let dniSwapped = false;
   const previewImages = new Map();
+  const pendingFilters = new Set();
+  let viewerZoom = 100;
 
   function createTabData(name) {
     return {
@@ -62,6 +66,7 @@ const App = (() => {
       originalImageDataUrl: null,
       isReAdjusting: false,
       corners: null,
+      editorCropMode: 'perspective',
       viewRevision: 0,
       filterRevision: 0,
       importRevision: 0
@@ -215,6 +220,28 @@ const App = (() => {
     dom.adjSaturation = document.getElementById('adj-saturation');
     dom.adjBgCleanValue = document.getElementById('adj-bg-clean-value');
     dom.adjSaturationValue = document.getElementById('adj-saturation-value');
+    dom.appMain = document.getElementById('app-main');
+    dom.railPageCount = document.getElementById('rail-page-count');
+    dom.viewerPrev = document.getElementById('btn-viewer-prev');
+    dom.viewerNext = document.getElementById('btn-viewer-next');
+    dom.viewerPageNumber = document.getElementById('viewer-page-number');
+    dom.viewerPageTotal = document.getElementById('viewer-page-total');
+    dom.viewerViewMode = document.getElementById('document-view-mode');
+    dom.viewerScroll = document.getElementById('result-viewer-scroll');
+    dom.singlePageView = document.getElementById('single-page-view');
+    dom.documentPages = document.getElementById('document-pages');
+    dom.resultPaper = document.getElementById('result-paper');
+    dom.zoomIn = document.getElementById('btn-zoom-in');
+    dom.zoomOut = document.getElementById('btn-zoom-out');
+    dom.zoomReset = document.getElementById('btn-zoom-reset');
+    dom.cropModes = document.querySelectorAll('[data-crop-mode]');
+    dom.cropReset = document.getElementById('btn-crop-reset');
+    dom.resetAdjustments = document.getElementById('btn-reset-adjustments');
+    dom.filterStatus = document.getElementById('filter-status');
+    const adjustmentIds = { bgClean: 'bg-clean', saturation: 'saturation', brightness: 'brightness',
+      contrast: 'contrast', warmth: 'warmth', whiteBalance: 'white-balance', sharpness: 'sharpness' };
+    dom.adjustmentControls = Object.fromEntries(Object.entries(adjustmentIds).map(([key, id]) =>
+      [key, { input: document.getElementById(`adj-${id}`), output: document.getElementById(`adj-${id}-value`) }]));
   }
 
   // ======== Initialization ========
@@ -387,62 +414,89 @@ const App = (() => {
 
     // Tab controls
     dom.btnAddTab.addEventListener('click', addNewTab);
+    dom.viewerPrev.addEventListener('click', () => selectPage(currentTab().activePageIndex - 1));
+    dom.viewerNext.addEventListener('click', () => selectPage(currentTab().activePageIndex + 1));
+    dom.viewerPageNumber.addEventListener('change', () => {
+      const index = Number(dom.viewerPageNumber.value) - 1;
+      if (Number.isInteger(index)) selectPage(index);
+      updatePageCounter();
+    });
+    dom.viewerViewMode.addEventListener('change', updateDocumentView);
+    dom.zoomIn.addEventListener('click', () => setViewerZoom(viewerZoom + 25));
+    dom.zoomOut.addEventListener('click', () => setViewerZoom(viewerZoom - 25));
+    dom.zoomReset.addEventListener('click', () => setViewerZoom(100));
+    new ResizeObserver(updateViewerSize).observe(dom.viewerScroll);
+    dom.cropModes.forEach(button => button.addEventListener('click', () => {
+      Corners.setMode(button.dataset.cropMode);
+      updateCropModeButtons();
+    }));
+    dom.cropReset.addEventListener('click', () => Corners.reset());
+    dom.resetAdjustments.addEventListener('click', () => {
+      setManualControlValues(NEUTRAL_ADJUSTMENTS);
+      scheduleManualFilter();
+    });
 
     // Filter buttons
     dom.filterBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = currentTab();
         const filter = btn.dataset.filter;
-        if (filter === tab.currentFilter) return;
-        if (filter === 'manual') {
-          const page = tab.scannedPages[tab.activePageIndex];
-          setManualControlValues(page?.manualOptions || { bgClean: 0, saturation: 50 });
-        }
+        clearTimeout(manualFilterTimer);
+        manualFilterTimer = null;
+        setManualControlValues(NEUTRAL_ADJUSTMENTS);
         tab.currentFilter = filter;
-        dom.filterBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+        const page = tab.scannedPages[tab.activePageIndex];
+        if (!page) return;
+        page.filter = filter;
+        page.manualOptions = readAdjustmentValues();
+        page.needsFilter = true;
+        updateFilterButtons(filter);
+        tab.filterRevision++;
         reapplyFilterToActivePage();
       });
     });
 
     // Sliders
-    if (dom.adjBgClean) {
-      dom.adjBgClean.addEventListener('input', scheduleManualFilter);
-    }
-    if (dom.adjSaturation) {
-      dom.adjSaturation.addEventListener('input', scheduleManualFilter);
-    }
+    Object.values(dom.adjustmentControls).forEach(({ input }) => input.addEventListener('input', scheduleManualFilter));
     updateManualControlLabels();
   }
 
   function setManualControlValues(options) {
-    if (dom.adjBgClean) dom.adjBgClean.value = options.bgClean ?? 0;
-    if (dom.adjSaturation) dom.adjSaturation.value = options.saturation ?? 50;
+    const settings = normalizeAdjustments(options);
+    Object.entries(dom.adjustmentControls).forEach(([key, control]) => { control.input.value = settings[key]; });
     updateManualControlLabels();
   }
 
   function updateManualControlLabels() {
-    const background = Number.parseInt(dom.adjBgClean?.value || '0', 10);
-    const saturation = Number.parseInt(dom.adjSaturation?.value || '50', 10);
-    if (dom.adjBgCleanValue) dom.adjBgCleanValue.textContent = `${background}%`;
-    if (dom.adjSaturationValue) {
-      const delta = Math.round((saturation - 50) / 2);
-      dom.adjSaturationValue.textContent = delta === 0 ? 'Natural' : `${delta > 0 ? '+' : ''}${delta}%`;
-    }
+    Object.entries(dom.adjustmentControls).forEach(([key, { input, output }]) => {
+      const value = Number(input.value);
+      if (key === 'saturation') {
+        const delta = Math.round((value - 50) / 2);
+        output.textContent = delta ? `${delta > 0 ? '+' : ''}${delta}%` : 'Natural';
+      } else if (key === 'warmth') output.textContent = value ? `${value > 0 ? '+' : ''}${value}` : 'Neutra';
+      else output.textContent = ['brightness', 'contrast'].includes(key) ? `${value > 0 ? '+' : ''}${value}` : `${value}%`;
+    });
+  }
+
+  function readAdjustmentValues() {
+    return normalizeAdjustments(Object.fromEntries(Object.entries(dom.adjustmentControls).map(([key, { input }]) => [key, input.value])));
   }
 
   function scheduleManualFilter() {
     updateManualControlLabels();
     clearTimeout(manualFilterTimer);
     const tab = currentTab();
-    const tabId = tab.id;
-    const pageIndex = tab.activePageIndex;
+    const page = tab.scannedPages[tab.activePageIndex];
+    if (!page) return;
+    page.manualOptions = readAdjustmentValues();
+    page.needsFilter = true;
+    page.renderRevision = (page.renderRevision || 0) + 1;
+    tab.filterRevision++;
+    updateFilterStatus('Actualizando vista previa…');
     manualFilterTimer = setTimeout(() => {
-      if (currentTab().id === tabId && currentTab().activePageIndex === pageIndex &&
-          currentTab().currentFilter === 'manual') {
-        reapplyFilterToActivePage();
-      }
-    }, 100);
+      manualFilterTimer = null;
+      applyPageFilter(tab, page);
+    }, 130);
   }
 
   // ======== Manual Camera ========
@@ -768,6 +822,11 @@ const App = (() => {
     // Save the current tab's visual state. No cv.Mat objects are saved.
     const tab = currentTab();
     if (!tab) return;
+    flushActiveAdjustment();
+    if (tab.state === 'editor') {
+      tab.corners = Corners.getPoints();
+      tab.editorCropMode = Corners.getMode();
+    }
     // State (upload/editor/result) is already tracked in tab.state via setState
     // scannedPages, activePageIndex, currentFilter are already on the tab
     // originalImageDataUrl is saved when entering editor
@@ -1270,6 +1329,8 @@ const App = (() => {
   function setState(state) {
     currentTab().state = state === 'camera' ? 'upload' : state;
     document.body.classList.toggle('camera-open', state === 'camera');
+    document.body.dataset.workspace = state;
+    dom.appMain.classList.toggle('has-document', ['result', 'editor'].includes(state) && currentTab().scannedPages.length > 0);
 
     dom.uploadZone.classList.add('hidden');
     dom.cameraZone.classList.add('hidden');
@@ -1294,6 +1355,7 @@ const App = (() => {
         break;
     }
     updateFlowNavigation(state);
+    if (state === 'result') requestAnimationFrame(updateDocumentView);
   }
 
   function goToUpload() {
@@ -1345,11 +1407,13 @@ const App = (() => {
     const imgW = img.naturalWidth;
     const imgH = img.naturalHeight;
 
-    const wrapper = dom.canvasWrapper;
-    const maxDisplayWidth = wrapper.clientWidth;
-    const scale = Math.min(maxDisplayWidth / imgW, 1);
+    const stage = dom.canvasWrapper.parentElement;
+    const maxDisplayWidth = Math.max(100, stage.clientWidth - 48);
+    const maxDisplayHeight = Math.max(160, stage.clientHeight - 48);
+    const scale = Math.min(maxDisplayWidth / imgW, maxDisplayHeight / imgH, 1);
     const displayW = Math.round(imgW * scale);
     const displayH = Math.round(imgH * scale);
+    dom.canvasWrapper.style.width = `${displayW}px`;
 
     dom.canvasInput.width = displayW;
     dom.canvasInput.height = displayH;
@@ -1364,6 +1428,8 @@ const App = (() => {
 
     if (originalMat) originalMat.delete();
     originalMat = cv.imread(tempCanvas);
+    tempCanvas.width = 0;
+    tempCanvas.height = 0;
 
     let detectedPoints = predefinedCorners;
 
@@ -1397,8 +1463,10 @@ const App = (() => {
       displayW,
       displayH,
       imgW,
-      imgH
+      imgH,
+      currentTab().editorCropMode
     );
+    updateCropModeButtons();
 
     const tab = currentTab();
     if (tab.isReAdjusting && tab.scannedPages.length > 1) {
@@ -1457,6 +1525,7 @@ const App = (() => {
   // ======== Re-adjust ========
 
   function startReAdjust() {
+    flushActiveAdjustment();
     const tab = currentTab();
     if (tab.activePageIndex < 0 || tab.activePageIndex >= tab.scannedPages.length) return;
     
@@ -1467,6 +1536,7 @@ const App = (() => {
     }
 
     tab.isReAdjusting = true;
+    tab.editorCropMode = page.cropMode || 'perspective';
 
     const img = new Image();
     img.onload = () => {
@@ -1504,7 +1574,9 @@ const App = (() => {
 
       const targetFilter = tab.isReAdjusting ? tab.scannedPages[tab.activePageIndex].filter : 'original';
       
-      filtered = Scanner.applyFilter(warpedMat, targetFilter);
+      const previousPage = tab.isReAdjusting ? tab.scannedPages[tab.activePageIndex] : null;
+      const options = normalizeAdjustments(previousPage?.manualOptions);
+      filtered = Scanner.applyFilter(warpedMat, targetFilter, options);
       Scanner.drawToCanvas(filtered, dom.canvasOutput);
 
       const warpCanvas = document.createElement('canvas');
@@ -1513,13 +1585,18 @@ const App = (() => {
       cv.imshow(warpCanvas, warpedMat);
 
       const pageData = {
+        ...(previousPage || {}),
         originalDataUrl: originalImage.src,
         corners: cornerPoints,
         warpedDataUrl: warpCanvas.toDataURL('image/jpeg', 0.92),
         dataUrl: dom.canvasOutput.toDataURL('image/jpeg', 0.92),
         width: dom.canvasOutput.width,
         height: dom.canvasOutput.height,
-        filter: targetFilter
+        filter: targetFilter,
+        manualOptions: options,
+        cropMode: Corners.getMode(),
+        needsFilter: false,
+        filterTask: null
       };
 
       if (tab.isReAdjusting) {
@@ -1557,6 +1634,7 @@ const App = (() => {
           const nextPage = tab.scannedPages[tab.activePageIndex];
           if (nextPage.originalDataUrl) {
             tab.isReAdjusting = true;
+            tab.editorCropMode = nextPage.cropMode || 'perspective';
             const img = new Image();
             img.onload = () => {
               if (!isActiveTab(tab) || tab.scannedPages[tab.activePageIndex] !== nextPage) return;
@@ -1588,169 +1666,215 @@ const App = (() => {
 
   // ======== Re-apply filter to active page ========
 
+  function updateFilterButtons(filter) {
+    dom.filterBtns.forEach(button => {
+      const active = button.dataset.filter === filter;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+
+  function updateFilterStatus(message) {
+    const labels = { original: 'Original', auto: 'Automático', document: 'Texto B/N', whiteboard: 'Pizarra',
+      color: 'Color natural', manual: 'Personalizado', gray: 'Grises', sepia: 'Sepia', sketch: 'Boceto', highcontrast: 'Alto contraste' };
+    const page = currentTab().scannedPages[currentTab().activePageIndex];
+    const adjusted = Object.entries(normalizeAdjustments(page?.manualOptions)).some(([key, value]) => value !== NEUTRAL_ADJUSTMENTS[key]);
+    dom.filterStatus.textContent = message || (currentTab().currentFilter === 'original' && !adjusted
+      ? 'Original · sin cambios de color'
+      : `${labels[currentTab().currentFilter] || 'Original'} · cambios guardados en esta página`);
+  }
+
   function reapplyFilterToActivePage() {
     const tab = currentTab();
-    if (tab.activePageIndex < 0 || tab.activePageIndex >= tab.scannedPages.length) return;
-
     const page = tab.scannedPages[tab.activePageIndex];
-    const pageIndex = tab.activePageIndex;
-    const filter = tab.currentFilter;
-    const revision = ++tab.filterRevision;
-    const options = filter === 'manual' ? {
-      bgClean: dom.adjBgClean ? Number.parseInt(dom.adjBgClean.value, 10) : 0,
-      saturation: dom.adjSaturation ? Number.parseInt(dom.adjSaturation.value, 10) : 50
-    } : {};
+    if (!page) return Promise.resolve(false);
+    return applyPageFilter(tab, page);
+  }
 
-    const img = new Image();
-    img.onload = () => {
-      if (!isActiveTab(tab) || revision !== tab.filterRevision ||
-          tab.activePageIndex !== pageIndex || tab.scannedPages[pageIndex] !== page) return;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = img.naturalWidth;
-      tempCanvas.height = img.naturalHeight;
-      const ctx = tempCanvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-
-      const mat = cv.imread(tempCanvas);
-      let filtered = null;
+  function applyPageFilter(tab, page) {
+    const revision = (page.renderRevision || 0) + 1;
+    page.renderRevision = revision;
+    const filter = page.filter;
+    const options = normalizeAdjustments(page.manualOptions);
+    const task = (async () => {
+      const image = await loadImage(page.warpedDataUrl);
+      if (revision !== page.renderRevision || !findTabById(tab.id) || !tab.scannedPages.includes(page)) return false;
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0);
+      let mat = null, filtered = null;
       try {
-        if (filter === 'manual') {
-          page.manualOptions = options;
-        }
-
+        mat = cv.imread(canvas);
         filtered = Scanner.applyFilter(mat, filter, options);
-        if (!isActiveTab(tab) || revision !== tab.filterRevision) return;
-        Scanner.drawToCanvas(filtered, dom.canvasOutput);
-
-        const updatedPage = {
-          ...page,
-          dataUrl: dom.canvasOutput.toDataURL('image/jpeg', 0.92),
-          width: dom.canvasOutput.width,
-          height: dom.canvasOutput.height,
-          filter
-        };
-        if (!canStorePage(tab, updatedPage, pageIndex)) {
-          showToast('El filtro excede el límite de memoria del documento', 'warning');
-          tab.currentFilter = page.filter;
-          showActivePage();
-          return;
+        Scanner.drawToCanvas(filtered, canvas);
+        const index = tab.scannedPages.indexOf(page);
+        const updated = { ...page, dataUrl: canvas.toDataURL('image/jpeg', 0.92),
+          width: canvas.width, height: canvas.height, filter, manualOptions: options };
+        if (!canStorePage(tab, updated, index)) throw new Error('El ajuste supera la memoria disponible. Reduce las páginas del documento.');
+        Object.assign(page, updated, { needsFilter: false });
+        if (isActiveTab(tab)) {
+          if (tab.scannedPages[tab.activePageIndex] === page) {
+            tab.viewRevision++;
+            dom.canvasOutput.width = canvas.width;
+            dom.canvasOutput.height = canvas.height;
+            dom.canvasOutput.getContext('2d').drawImage(canvas, 0, 0);
+            updateViewerSize();
+            updateFilterStatus();
+          }
+          renderPagesStrip();
+          if (!dom.exportModal.classList.contains('hidden')) updateExportModalUi();
         }
-        Object.assign(page, updatedPage);
-        renderPagesStrip();
-      } catch (err) {
-        console.error('[App] Re-filter error:', err);
-        showToast('Error al aplicar filtro', 'error');
+        return true;
       } finally {
-        if (filtered) filtered.delete();
-        mat.delete();
-        tempCanvas.width = 0;
-        tempCanvas.height = 0;
+        mat?.delete();
+        filtered?.delete();
+        canvas.width = 0; canvas.height = 0;
       }
-    };
-    img.onerror = () => {
-      if (isActiveTab(tab) && revision === tab.filterRevision) {
-        showToast('No se pudo cargar la página para aplicar el filtro', 'error');
+    })().catch(error => {
+      console.error('[App] Filter error:', error);
+      if (revision === page.renderRevision) {
+        page.needsFilter = true;
+        if (isActiveTab(tab)) {
+          showToast(error.message || 'No se pudo aplicar el ajuste.', 'error');
+          updateFilterStatus('No se pudo guardar el ajuste. Intenta nuevamente.');
+        }
       }
-    };
-    img.src = page.warpedDataUrl;
-    
-    if (dom.manualAdjustments) {
-      if (filter === 'manual') {
-        dom.manualAdjustments.classList.remove('hidden');
-      } else {
-        dom.manualAdjustments.classList.add('hidden');
-      }
-    }
+      return false;
+    });
+    pendingFilters.add(task);
+    page.filterTask = task;
+    task.finally(() => {
+      pendingFilters.delete(task);
+      if (page.filterTask === task) page.filterTask = null;
+    });
+    return task;
+  }
+
+  function flushActiveAdjustment() {
+    if (!manualFilterTimer) return;
+    clearTimeout(manualFilterTimer);
+    manualFilterTimer = null;
+    reapplyFilterToActivePage();
+  }
+
+  async function settlePageFilters() {
+    clearTimeout(manualFilterTimer);
+    manualFilterTimer = null;
+    const tab = currentTab();
+    await Promise.all(tab.scannedPages.filter(page => page.needsFilter).map(page => applyPageFilter(tab, page)));
+    await Promise.all([...pendingFilters]);
+    if (tab.scannedPages.some(page => page.needsFilter)) throw new Error('Un ajuste no se pudo guardar. Revisa la página antes de descargar.');
   }
 
   async function applyFilterToAllPages() {
     const tab = currentTab();
     if (tab.scannedPages.length <= 1) {
-      showToast('No hay suficientes páginas adicionales', 'info');
+      showToast('Agrega otra página para aplicar el acabado a todas.', 'info');
       return;
     }
-
-    const currentFilter = tab.currentFilter;
+    flushActiveAdjustment();
+    const filter = tab.currentFilter;
+    const options = readAdjustmentValues();
     const revision = ++tab.filterRevision;
-    let completed = true;
-    showToast(`Aplicando filtro a todas las páginas...`, 'info');
-
-    for (let i = 0; i < tab.scannedPages.length; i++) {
-      if (revision !== tab.filterRevision) {
-        completed = false;
-        break;
+    let completed = 0;
+    dom.btnApplyAll.disabled = true;
+    try {
+      for (const page of [...tab.scannedPages]) {
+        if (revision !== tab.filterRevision || !findTabById(tab.id)) break;
+        page.filter = filter;
+        page.manualOptions = { ...options };
+        page.needsFilter = true;
+        if (await applyPageFilter(tab, page)) completed++;
+        else break;
+        showToast(`Aplicando acabado: ${completed}/${tab.scannedPages.length}`, 'info', 'filter-progress');
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
-      const page = tab.scannedPages[i];
-      if (page.filter === currentFilter && currentFilter !== 'manual') continue;
-
-      await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          if (revision !== tab.filterRevision) {
-            resolve();
-            return;
-          }
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = img.naturalWidth;
-          tempCanvas.height = img.naturalHeight;
-          const tempCtx = tempCanvas.getContext('2d');
-          tempCtx.drawImage(img, 0, 0);
-
-          let mat = null;
-          let filtered = null;
-          const outCanvas = document.createElement('canvas');
-          try {
-            mat = cv.imread(tempCanvas);
-            let options = {};
-            if (currentFilter === 'manual') {
-              const activePage = tab.scannedPages[tab.activePageIndex];
-              options = activePage.manualOptions || { bgClean: 0, saturation: 50 };
-              page.manualOptions = { ...options };
-            }
-
-            filtered = Scanner.applyFilter(mat, currentFilter, options);
-            if (revision !== tab.filterRevision) return;
-            Scanner.drawToCanvas(filtered, outCanvas);
-            const updatedPage = {
-              ...page,
-              dataUrl: outCanvas.toDataURL('image/jpeg', 0.9),
-              width: outCanvas.width,
-              height: outCanvas.height,
-              filter: currentFilter
-            };
-            if (!canStorePage(tab, updatedPage, i)) {
-              completed = false;
-              return;
-            }
-            Object.assign(page, updatedPage);
-          } catch (error) {
-            console.error(`[App] Error filtering page ${i + 1}:`, error);
-          } finally {
-            if (mat) mat.delete();
-            if (filtered) filtered.delete();
-            tempCanvas.width = 0;
-            tempCanvas.height = 0;
-            outCanvas.width = 0;
-            outCanvas.height = 0;
-            resolve();
-          }
-        };
-        img.onerror = () => {
-          console.error(`[App] Could not load page ${i + 1} for bulk filtering`);
-          resolve();
-        };
-        img.src = page.warpedDataUrl;
-      });
-    }
-
-    if (isActiveTab(tab)) {
-      showActivePage();
-      renderPagesStrip();
-    }
-    showToast(completed ? 'Filtro aplicado a todas las páginas' : 'Aplicación de filtro cancelada', completed ? 'success' : 'info');
+      if (isActiveTab(tab)) { showActivePage(); renderPagesStrip(); }
+      showToast(completed === tab.scannedPages.length ? 'Acabado y ajustes aplicados a todas' : `Se actualizaron ${completed} páginas.`,
+        completed === tab.scannedPages.length ? 'success' : 'warning');
+    } finally { dom.btnApplyAll.disabled = false; }
   }
 
   // ======== Page Actions ========
+
+  function updateCropModeButtons() {
+    dom.cropModes.forEach(button => {
+      const active = button.dataset.cropMode === Corners.getMode();
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+
+  function setViewerZoom(value) {
+    viewerZoom = Math.max(50, Math.min(200, value));
+    dom.zoomReset.textContent = `${viewerZoom}%`;
+    dom.zoomOut.disabled = viewerZoom === 50;
+    dom.zoomIn.disabled = viewerZoom === 200;
+    updateViewerSize();
+  }
+
+  function updateViewerSize() {
+    if (currentTab()?.state !== 'result' || !dom.canvasOutput.width) return;
+    const availableWidth = Math.max(120, dom.viewerScroll.clientWidth - 48);
+    const availableHeight = Math.max(140, dom.viewerScroll.clientHeight - 64);
+    const fit = Math.min(availableWidth / dom.canvasOutput.width, availableHeight / dom.canvasOutput.height);
+    dom.resultPaper.style.width = `${Math.round(dom.canvasOutput.width * fit * viewerZoom / 100)}px`;
+    dom.documentPages.style.setProperty('--document-zoom', viewerZoom / 100);
+    dom.documentPages.style.setProperty('--document-page-width', `${Math.round(availableWidth * viewerZoom / 100)}px`);
+  }
+
+  function updateDocumentView() {
+    const all = dom.viewerViewMode.value === 'all';
+    dom.singlePageView.classList.toggle('hidden', all);
+    dom.documentPages.classList.toggle('hidden', !all);
+    if (all) renderDocumentPages();
+    updateViewerSize();
+  }
+
+  function renderDocumentPages() {
+    const tab = currentTab();
+    if (dom.documentPages.children.length !== tab.scannedPages.length || dom.documentPages.dataset.tabId !== String(tab.id)) {
+      dom.documentPages.replaceChildren();
+      dom.documentPages.dataset.tabId = tab.id;
+      tab.scannedPages.forEach((page, index) => {
+        const article = document.createElement('article');
+        article.className = 'document-page';
+        article.dataset.pageIndex = index;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'document-page__paper';
+        button.setAttribute('aria-label', `Seleccionar página ${index + 1} para editar`);
+        const image = document.createElement('img');
+        image.alt = `Página ${index + 1}`;
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        image.width = page.width;
+        image.height = page.height;
+        button.appendChild(image);
+        button.addEventListener('click', () => selectPage(index));
+        const caption = document.createElement('button');
+        caption.className = 'document-page__caption';
+        caption.type = 'button';
+        caption.textContent = `Página ${index + 1} · Editar`;
+        caption.addEventListener('click', () => {
+          selectPage(index);
+          dom.viewerViewMode.value = 'single';
+          updateDocumentView();
+        });
+        article.append(button, caption);
+        dom.documentPages.appendChild(article);
+      });
+    }
+    Array.from(dom.documentPages.children).forEach((article, index) => {
+      const page = tab.scannedPages[index];
+      const image = article.querySelector('img');
+      if (image.getAttribute('src') !== page.dataUrl) image.src = page.dataUrl;
+      image.width = page.width; image.height = page.height;
+      article.classList.toggle('active', index === tab.activePageIndex);
+    });
+  }
 
   function addAnotherPage() {
     currentTab().isReAdjusting = false;
@@ -1788,9 +1912,7 @@ const App = (() => {
     const revision = ++tab.viewRevision;
 
     tab.currentFilter = page.filter;
-    dom.filterBtns.forEach(button => button.classList.remove('active'));
-    const activeBtn = document.querySelector(`[data-filter="${page.filter}"]`);
-    if (activeBtn) activeBtn.classList.add('active');
+    updateFilterButtons(page.filter);
     if (dom.advancedFilters && ['gray', 'sepia', 'sketch', 'highcontrast', 'manual'].includes(page.filter)) {
       dom.advancedFilters.open = true;
     }
@@ -1803,6 +1925,7 @@ const App = (() => {
       dom.canvasOutput.height = img.naturalHeight;
       const ctx = dom.canvasOutput.getContext('2d');
       ctx.drawImage(img, 0, 0);
+      updateViewerSize();
     };
     img.onerror = () => {
       if (isActiveTab(tab) && revision === tab.viewRevision) {
@@ -1817,14 +1940,10 @@ const App = (() => {
       dom.btnReadjust.style.display = 'inline-flex';
     }
 
-    if (dom.manualAdjustments) {
-      if (tab.currentFilter === 'manual') {
-        dom.manualAdjustments.classList.remove('hidden');
-        setManualControlValues(page.manualOptions || { bgClean: 0, saturation: 50 });
-      } else {
-        dom.manualAdjustments.classList.add('hidden');
-      }
-    }
+    setManualControlValues(page.manualOptions || NEUTRAL_ADJUSTMENTS);
+    dom.manualAdjustments.classList.remove('hidden');
+    updateFilterStatus(page.needsFilter ? 'Actualizando vista previa…' : undefined);
+    if (page.needsFilter && !page.filterTask) applyPageFilter(tab, page);
 
     highlightActiveThumb();
   }
@@ -1832,8 +1951,19 @@ const App = (() => {
   function selectPage(index) {
     const tab = currentTab();
     if (index < 0 || index >= tab.scannedPages.length) return;
+    if (tab.state === 'editor') {
+      if (index === tab.activePageIndex) return;
+      if (tab.isReAdjusting) {
+        performScan();
+        if (tab.state === 'editor') return;
+      } else return;
+    }
+    flushActiveAdjustment();
     tab.activePageIndex = index;
     showActivePage();
+    if (dom.viewerViewMode.value === 'all') {
+      dom.documentPages.querySelector(`[data-page-index="${index}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 
   // ======== Drag & Drop Reordering (Pages Strip) ========
@@ -1844,6 +1974,7 @@ const App = (() => {
     if (!dom.pagesStripList) return;
 
     const tab = currentTab();
+    dom.railPageCount.textContent = tab.scannedPages.length;
     dom.pagesStripList.innerHTML = '';
 
     if (tab.scannedPages.length === 0) {
@@ -1870,6 +2001,8 @@ const App = (() => {
       img.src = page.dataUrl;
       img.alt = `Página ${i + 1}`;
       img.draggable = false;
+      img.loading = 'lazy';
+      img.decoding = 'async';
 
       const label = document.createElement('span');
       label.className = 'page-thumb__label';
@@ -1898,6 +2031,7 @@ const App = (() => {
     });
 
     highlightActiveThumb();
+    if (dom.viewerViewMode.value === 'all') renderDocumentPages();
   }
 
   function handleDragStart(e) {
@@ -1963,7 +2097,9 @@ const App = (() => {
     const thumbs = dom.pagesStripList.querySelectorAll('.page-thumb');
     thumbs.forEach((t, i) => {
       t.classList.toggle('active', i === tab.activePageIndex);
+      t.setAttribute('aria-current', i === tab.activePageIndex ? 'page' : 'false');
     });
+    Array.from(dom.documentPages.children).forEach((article, index) => article.classList.toggle('active', index === tab.activePageIndex));
     const activeThumb = dom.pagesStripList.querySelector('.page-thumb.active');
     if (activeThumb) {
       activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -1972,6 +2108,13 @@ const App = (() => {
 
   function updatePageCounter() {
     const tab = currentTab();
+    dom.viewerPageNumber.value = tab.activePageIndex + 1;
+    dom.viewerPageNumber.max = tab.scannedPages.length;
+    dom.viewerPageTotal.textContent = `/ ${tab.scannedPages.length}`;
+    dom.viewerPrev.disabled = tab.activePageIndex <= 0;
+    dom.viewerNext.disabled = tab.activePageIndex >= tab.scannedPages.length - 1;
+    dom.btnPageLeft.disabled = tab.activePageIndex <= 0;
+    dom.btnPageRight.disabled = tab.activePageIndex >= tab.scannedPages.length - 1;
     if (dom.pageCounter) {
       if (tab.scannedPages.length > 0) {
         dom.pageCounter.textContent = `${tab.activePageIndex + 1} / ${tab.scannedPages.length}`;
@@ -2316,6 +2459,11 @@ const App = (() => {
   async function confirmExport() {
     const tab = currentTab();
     if (tab.scannedPages.length === 0) return;
+    dom.btnExportConfirm.disabled = true;
+    try { await settlePageFilters(); }
+    catch (error) { showToast(error.message, 'error'); dom.btnExportConfirm.disabled = false; return; }
+    dom.btnExportConfirm.disabled = false;
+    if (currentTab().id !== tab.id || dom.exportModal.classList.contains('hidden')) return;
 
     let format = 'pdf';
     dom.exportFormatOptions.forEach(opt => { if (opt.checked) format = opt.value; });
@@ -2468,27 +2616,7 @@ const App = (() => {
         }
       }
 
-      if (window.showSaveFilePicker) {
-        try {
-          const pdfBlob = pdf.output('blob');
-          const handle = await window.showSaveFilePicker({
-            suggestedName: `pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`,
-            types: [{ description: 'Documento PDF', accept: { 'application/pdf': ['.pdf'] } }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(pdfBlob);
-          await writable.close();
-          showToast(`PDF guardado con éxito`, 'success');
-        } catch (err) {
-          if (err.name !== 'AbortError') {
-            pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
-            showToast(`PDF descargado`, 'success');
-          }
-        }
-      } else {
-        pdf.save(`pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
-        showToast(`PDF descargado`, 'success');
-      }
+      await saveGeneratedPdf(pdf, `pablito-leans-${pagesToExport.length}pag-${Date.now()}.pdf`);
     } catch (err) {
       console.error('[App] PDF generation error:', err);
       showToast(err.message || 'Error al generar PDF.', 'error');
@@ -2501,23 +2629,8 @@ const App = (() => {
   }
 
   async function saveGeneratedPdf(pdf, fileName) {
-    if (window.showSaveFilePicker) {
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: fileName,
-          types: [{ description: 'Documento PDF', accept: { 'application/pdf': ['.pdf'] } }]
-        });
-        const writable = await handle.createWritable();
-        await writable.write(pdf.output('blob'));
-        await writable.close();
-        showToast('PDF de impresión guardado', 'success');
-        return;
-      } catch (error) {
-        if (error.name === 'AbortError') return;
-      }
-    }
-    pdf.save(fileName);
-    showToast('PDF de impresión descargado', 'success');
+    downloadBlob(pdf.output('blob'), fileName);
+    showToast('PDF enviado a las descargas del navegador', 'success');
   }
 
   async function generatePrintPdf(pagesToExport) {
@@ -2655,17 +2768,6 @@ const App = (() => {
         });
       };
 
-      const downloadBlob = (blob, filename) => {
-        const objectUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.download = filename;
-        link.href = objectUrl;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      };
-
       if (imageMethod === 'individual') {
         // Individual downloads
         for (let i = 0; i < pagesToExport.length; i++) {
@@ -2674,30 +2776,7 @@ const App = (() => {
           const res = await fetch(dataUrl);
           const blob = await res.blob();
 
-          if (window.showSaveFilePicker) {
-            try {
-              const handle = await window.showSaveFilePicker({
-                suggestedName: `pablito-leans-pag-${i + 1}-${Date.now()}.jpg`,
-                types: [{ description: 'Imagen JPEG', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } }]
-              });
-              const writable = await handle.createWritable();
-              await writable.write(blob);
-              await writable.close();
-            } catch(e) { 
-              if(e.name !== 'AbortError') {
-                // Fallback to standard link download
-                const link = document.createElement('a');
-                link.download = `pablito-leans-pag-${i + 1}-${Date.now()}.jpg`;
-                link.href = dataUrl;
-                link.click();
-              } 
-            }
-          } else {
-            const link = document.createElement('a');
-            link.download = `pablito-leans-pag-${i + 1}-${Date.now()}.jpg`;
-            link.href = dataUrl;
-            link.click();
-          }
+          downloadBlob(blob, `pablito-leans-pag-${i + 1}-${Date.now()}.jpg`);
           // Slight delay to avoid browser blocking multiple downloads
           if (pagesToExport.length > 1) {
             await new Promise(r => setTimeout(r, 600));
@@ -2722,26 +2801,8 @@ const App = (() => {
         }
         
         const zipBlob = await zip.generateAsync({ type: 'blob' });
-        if (window.showSaveFilePicker) {
-          try {
-            const handle = await window.showSaveFilePicker({
-              suggestedName: `pablito-leans-${pagesToExport.length}imagenes-${Date.now()}.zip`,
-              types: [{ description: 'Archivo ZIP', accept: { 'application/zip': ['.zip'] } }]
-            });
-            const writable = await handle.createWritable();
-            await writable.write(zipBlob);
-            await writable.close();
-            showToast(`ZIP guardado con éxito`, 'success');
-          } catch(e) { 
-            if(e.name !== 'AbortError') {
-              downloadBlob(zipBlob, `pablito-leans-${pagesToExport.length}imagenes-${Date.now()}.zip`);
-              showToast(`ZIP descargado`, 'success');
-            }
-          }
-        } else {
-          downloadBlob(zipBlob, `pablito-leans-${pagesToExport.length}imagenes-${Date.now()}.zip`);
-          showToast(`ZIP descargado`, 'success');
-        }
+        downloadBlob(zipBlob, `pablito-leans-${pagesToExport.length}imagenes-${Date.now()}.zip`);
+        showToast('ZIP enviado a las descargas del navegador', 'success');
       }
     } catch (err) {
       console.error('[App] Image generation error:', err);
