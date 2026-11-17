@@ -11,6 +11,7 @@ import { resolvePrintSize } from './export/print-sizes.js';
 import { createPrintPlan, fitImageToBox } from './export/layout-calculator.js';
 import { downloadBlob } from './export/download.js';
 import { NEUTRAL_ADJUSTMENTS, normalizeAdjustments } from './image-adjustments.js';
+import { createPanZoomViewport } from './pan-zoom.js';
 
 const App = (() => {
   'use strict';
@@ -54,6 +55,11 @@ const App = (() => {
   const previewImages = new Map();
   const pendingFilters = new Set();
   let viewerZoom = 100;
+  let previewZoom = 100;
+  let documentViewport = null;
+  let printViewport = null;
+  let viewerIdentity = null;
+  let previewPaperKey = null;
 
   function createTabData(name) {
     return {
@@ -199,6 +205,10 @@ const App = (() => {
     dom.scaleShortcuts = document.querySelectorAll('[data-print-scale]');
     dom.exportPreview = document.getElementById('export-preview');
     dom.previewCanvas = document.getElementById('print-preview-canvas');
+    dom.previewStage = document.getElementById('print-preview-stage');
+    dom.previewZoomIn = document.getElementById('btn-preview-zoom-in');
+    dom.previewZoomOut = document.getElementById('btn-preview-zoom-out');
+    dom.previewZoomReset = document.getElementById('btn-preview-zoom-reset');
     dom.previewEmpty = document.getElementById('preview-empty');
     dom.previewPaperLabel = document.getElementById('preview-paper-label');
     dom.previewCounter = document.getElementById('preview-sheet-counter');
@@ -228,6 +238,7 @@ const App = (() => {
     dom.viewerPageTotal = document.getElementById('viewer-page-total');
     dom.viewerViewMode = document.getElementById('document-view-mode');
     dom.viewerScroll = document.getElementById('result-viewer-scroll');
+    dom.viewerGestureHint = document.getElementById('viewer-gesture-hint');
     dom.singlePageView = document.getElementById('single-page-view');
     dom.documentPages = document.getElementById('document-pages');
     dom.resultPaper = document.getElementById('result-paper');
@@ -251,6 +262,7 @@ const App = (() => {
 
   function init() {
     cacheDom();
+    initViewports();
     bindEvents();
 
     window.addEventListener('beforeunload', (e) => {
@@ -431,8 +443,10 @@ const App = (() => {
     dom.viewerViewMode.addEventListener('change', updateDocumentView);
     dom.zoomIn.addEventListener('click', () => setViewerZoom(viewerZoom + 25));
     dom.zoomOut.addEventListener('click', () => setViewerZoom(viewerZoom - 25));
-    dom.zoomReset.addEventListener('click', () => setViewerZoom(100));
-    new ResizeObserver(updateViewerSize).observe(dom.viewerScroll);
+    dom.zoomReset.addEventListener('click', () => documentViewport.fit());
+    dom.previewZoomIn.addEventListener('click', () => printViewport.setZoom((previewZoom + 25) / 100));
+    dom.previewZoomOut.addEventListener('click', () => printViewport.setZoom((previewZoom - 25) / 100));
+    dom.previewZoomReset.addEventListener('click', () => printViewport.fit());
     dom.cropModes.forEach(button => button.addEventListener('click', () => {
       Corners.setMode(button.dataset.cropMode);
       updateCropModeButtons();
@@ -1825,28 +1839,59 @@ const App = (() => {
     });
   }
 
+  function initViewports() {
+    const updateZoomControls = (state, reset, minus, plus) => {
+      reset.textContent = `${Math.round(state.zoom * 100)}%`;
+      reset.disabled = !state.enabled;
+      minus.disabled = !state.enabled || state.zoom <= state.minZoom;
+      plus.disabled = !state.enabled || state.zoom >= state.maxZoom;
+    };
+    documentViewport = createPanZoomViewport(dom.viewerScroll, {
+      onChange(state) {
+        viewerZoom = state.zoom * 100;
+        updateZoomControls(state, dom.zoomReset, dom.zoomOut, dom.zoomIn);
+      }
+    });
+    printViewport = createPanZoomViewport(dom.previewStage, {
+      padding: 18,
+      onChange(state) {
+        previewZoom = state.zoom * 100;
+        updateZoomControls(state, dom.previewZoomReset, dom.previewZoomOut, dom.previewZoomIn);
+      }
+    });
+    documentViewport.setEnabled(false);
+    printViewport.setEnabled(false);
+  }
+
   function setViewerZoom(value) {
-    viewerZoom = Math.max(50, Math.min(200, value));
-    dom.zoomReset.textContent = `${viewerZoom}%`;
-    dom.zoomOut.disabled = viewerZoom === 50;
-    dom.zoomIn.disabled = viewerZoom === 200;
-    updateViewerSize();
+    documentViewport.setZoom(value / 100);
   }
 
   function updateViewerSize() {
     if (currentTab()?.state !== 'result' || !dom.canvasOutput.width) return;
-    const availableWidth = Math.max(120, dom.viewerScroll.clientWidth - 48);
-    const availableHeight = Math.max(140, dom.viewerScroll.clientHeight - 64);
-    const fit = Math.min(availableWidth / dom.canvasOutput.width, availableHeight / dom.canvasOutput.height);
-    dom.resultPaper.style.width = `${Math.round(dom.canvasOutput.width * fit * viewerZoom / 100)}px`;
-    dom.documentPages.style.setProperty('--document-zoom', viewerZoom / 100);
-    dom.documentPages.style.setProperty('--document-page-width', `${Math.round(availableWidth * viewerZoom / 100)}px`);
+    const tab = currentTab();
+    const all = dom.viewerViewMode.value === 'all';
+    const identity = all ? `all-${tab.id}` : tab.scannedPages[tab.activePageIndex];
+    const content = all ? dom.documentPages : dom.singlePageView;
+    let width = dom.canvasOutput.width;
+    let height = dom.canvasOutput.height;
+    if (all) {
+      width = 800;
+      content.style.width = `${width}px`;
+      content.style.height = 'auto';
+      height = Math.max(1, content.offsetHeight);
+    }
+    documentViewport.setContent(content, { width, height, mode: all ? 'width' : 'contain',
+      wheel: all ? 'pan' : 'zoom', reset: identity !== viewerIdentity });
+    viewerIdentity = identity;
   }
 
   function updateDocumentView() {
     const all = dom.viewerViewMode.value === 'all';
     dom.singlePageView.classList.toggle('hidden', all);
     dom.documentPages.classList.toggle('hidden', !all);
+    dom.btnCompare.classList.toggle('hidden', all);
+    dom.viewerGestureHint.textContent = all ? 'Arrastra · Ctrl + rueda para zoom' : 'Arrastra · rueda para zoom';
     if (all) renderDocumentPages();
     updateViewerSize();
   }
@@ -1892,6 +1937,7 @@ const App = (() => {
       image.width = page.width; image.height = page.height;
       article.classList.toggle('active', index === tab.activePageIndex);
     });
+    if (dom.viewerViewMode.value === 'all') updateViewerSize();
   }
 
   function addAnotherPage() {
@@ -1980,7 +2026,8 @@ const App = (() => {
     tab.activePageIndex = index;
     showActivePage();
     if (dom.viewerViewMode.value === 'all') {
-      dom.documentPages.querySelector(`[data-page-index="${index}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const article = dom.documentPages.querySelector(`[data-page-index="${index}"]`);
+      if (article) documentViewport.revealRect({ y: article.offsetTop, height: article.offsetHeight });
     }
   }
 
@@ -2187,6 +2234,7 @@ const App = (() => {
 
     if (dom.exportPageRange) dom.exportPageRange.value = '';
     previewSheetIndex = 0;
+    previewPaperKey = null;
     dniSwapped = false;
     
     modalTrigger = document.activeElement;
@@ -2205,6 +2253,7 @@ const App = (() => {
     previewRevision++;
     previewImages.clear();
     printPlan = null;
+    printViewport.setEnabled(false);
     if (modalTrigger instanceof HTMLElement) modalTrigger.focus();
     modalTrigger = null;
   }
@@ -2387,6 +2436,8 @@ const App = (() => {
 
   function showPrintConfigurationError(error) {
     printPlan = null;
+    previewPaperKey = null;
+    printViewport.setEnabled(false);
     previewRevision++;
     const message = error.message || 'Completa las medidas para calcular la impresión.';
     dom.printLayoutSummary.textContent = message;
@@ -2440,6 +2491,10 @@ const App = (() => {
     const canvas = dom.previewCanvas;
     canvas.width = Math.round(config.paper.width * factor);
     canvas.height = Math.round(config.paper.height * factor);
+    const paperKey = `${config.paper.name}-${config.paper.width}-${config.paper.height}`;
+    dom.previewStage.dataset.orientation = config.paper.landscape ? 'landscape' : 'portrait';
+    printViewport.setContent(canvas, { width: canvas.width, height: canvas.height, reset: paperKey !== previewPaperKey });
+    previewPaperKey = paperKey;
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);

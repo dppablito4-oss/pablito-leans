@@ -14,7 +14,11 @@ Herramienta web estática que permite escanear documentos directamente desde el 
 - 🔄 **Transformación de perspectiva** para aplanar documentos
 - 🎨 **Original sin corrección** y filtros opcionales Auto, Documento, Pizarra y Color
 - 👁️ **Comparación antes/después** manteniendo pulsada la vista previa
-- 🗃️ **Visor de páginas** con miniaturas, zoom, navegación y vista continua
+- 🗃️ **Visor de páginas** con miniaturas, navegación y vista continua. Lienzos
+  libres en el editor y la vista de impresión: arrastre, zoom de 10% a 800% con
+  rueda o pellizco y encuadre con doble clic o el botón del porcentaje. En la vista
+  continua, la rueda desplaza y Ctrl + rueda amplía. La hoja se encuadra al cambiar
+  de tamaño u orientación, sin modificar las medidas de impresión.
 - ✂️ **Recorte con ocho tiradores**: cuatro esquinas de perspectiva y cuatro
   bordes para cortar vertical u horizontalmente, con modo rectangular
 - 🎛️ **Ajustes por página** de luz, contraste, fondo, saturación, balance de

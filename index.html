@@ -209,22 +209,24 @@
           <select id="document-view-mode" aria-label="Vista del documento"><option value="single">Una página</option><option value="all">Todas las páginas</option></select>
           <div class="viewer-zoom" role="group" aria-label="Zoom de la página">
             <button id="btn-zoom-out" type="button" aria-label="Alejar">−</button>
-            <button id="btn-zoom-reset" type="button" title="Ajustar a la vista">100%</button>
+            <button id="btn-zoom-reset" type="button" title="Ajustar y centrar la página" aria-label="Ajustar y centrar la página">100%</button>
             <button id="btn-zoom-in" type="button" aria-label="Acercar">+</button>
           </div>
         </div>
-        <div class="result-viewer-scroll" id="result-viewer-scroll">
+        <div class="result-viewer-scroll" id="result-viewer-scroll" tabindex="0" role="region" aria-label="Lienzo del documento" aria-describedby="viewer-gesture-help">
         <div id="single-page-view" class="single-page-view">
         <div class="result-canvas-wrapper" id="result-paper">
           <canvas id="canvasOutput" role="img" aria-label="Vista previa de la página escaneada"></canvas>
+        </div>
+        </div>
+        <div class="document-pages hidden" id="document-pages" aria-label="Todas las páginas del documento"></div>
+        <span class="viewer-gesture-hint" id="viewer-gesture-hint" aria-hidden="true">Arrastra · rueda para zoom</span>
           <button class="compare-button" id="btn-compare" type="button" aria-label="Mantén pulsado para ver la imagen sin filtro">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
             <span>Mantén para ver original</span>
           </button>
         </div>
-        </div>
-        <div class="document-pages hidden" id="document-pages" aria-label="Todas las páginas del documento"></div>
-        </div>
+        <p class="sr-only" id="viewer-gesture-help">Arrastra para mover. Usa la rueda o dos dedos para ampliar. En todas las páginas, la rueda desplaza y Control más rueda amplía. Doble clic o 0 para encuadrar. Con el lienzo enfocado, usa +, − y las flechas.</p>
       </div>
 
       <aside class="result-sidebar">
@@ -555,10 +557,19 @@
         <aside class="export-preview" id="export-preview" aria-label="Vista previa de impresión">
           <div class="preview-heading"><div><span class="section-eyebrow">ANTES DE DESCARGAR</span><h4>Así quedará tu hoja</h4></div><span class="preview-paper-label" id="preview-paper-label">A4</span></div>
           <div class="print-layout-summary" id="print-layout-summary" aria-live="polite"></div>
-          <div class="print-preview-stage" id="print-preview-stage">
+          <div class="preview-viewport-toolbar">
+            <span>Arrastra · rueda para zoom</span>
+            <div class="viewport-zoom" role="group" aria-label="Zoom de la hoja">
+              <button id="btn-preview-zoom-out" type="button" aria-label="Alejar hoja">−</button>
+              <button id="btn-preview-zoom-reset" type="button" title="Ajustar y centrar la hoja" aria-label="Ajustar y centrar la hoja">100%</button>
+              <button id="btn-preview-zoom-in" type="button" aria-label="Acercar hoja">+</button>
+            </div>
+          </div>
+          <div class="print-preview-stage" id="print-preview-stage" tabindex="0" role="region" aria-label="Lienzo de la hoja de impresión" aria-describedby="preview-gesture-help">
             <canvas id="print-preview-canvas" width="630" height="891" role="img" aria-label="Vista previa de la hoja a imprimir"></canvas>
             <p class="preview-empty hidden" id="preview-empty">Elige medidas válidas para ver tu hoja.</p>
           </div>
+          <p class="sr-only" id="preview-gesture-help">Arrastra para mover y usa la rueda o dos dedos para ampliar. Doble clic o 0 para encuadrar la hoja. Con el lienzo enfocado, usa +, − y las flechas. El zoom no cambia las medidas de impresión.</p>
           <div class="preview-navigation">
             <button type="button" id="preview-prev" aria-label="Ver hoja anterior">←</button>
             <span id="preview-sheet-counter" aria-live="polite">Hoja 1 de 1</span>
