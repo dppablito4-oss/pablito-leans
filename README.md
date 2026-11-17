@@ -31,6 +31,8 @@ Herramienta web estática que permite escanear documentos directamente desde el 
 - 🪪 **DNI con dos caras**: anverso arriba y reverso debajo en la misma hoja,
   a tamaño normal o ampliado, con opción de intercambiar las caras
 - 📱 **Responsive** y compatible con cámaras de celular
+- 🌓 **Temas claro y oscuro AMOLED** con acento esmeralda y selector en la
+  cabecera. La elección se recuerda en próximas visitas y se sincroniza entre pestañas.
 - 🔒 **Procesamiento local** — los documentos no se suben a un servidor
 - ⌨️ **Accesible por teclado** — pestañas, diálogos y ajuste fino de esquinas
 - 📴 **PWA offline** — recursos críticos cacheados tras la primera instalación
@@ -116,6 +118,12 @@ permite revisar el detalle con zoom. Los ajustes de **Luz y limpieza** y
 **Color y nitidez** afectan a la página seleccionada, conservan el original y se
 mantienen al volver a recortar. **Restablecer** elimina los ajustes adicionales;
 **Original** también quita el filtro. Puedes copiar el acabado a todo el documento.
+
+El botón de sol/luna en la cabecera alterna entre **Claro** y **Oscuro AMOLED**.
+El tema oscuro usa negro puro como fondo, paneles con elevación y acento verde
+esmeralda. El claro mantiene la misma distribución con superficies blancas y
+texto oscuro. El cambio de tema afecta a la interfaz; conserva los colores de
+los documentos, los ajustes de recorte y los archivos exportados.
 
 **Mejorar documento** activa una mejora automática moderada. Regula su intensidad
 o usa **Quitar mejora automática** para desactivarla. **Reducir ruido** es

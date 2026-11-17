@@ -25,14 +25,14 @@ import { cropHandlePositions, moveCropHandle, rectangleFromPoints } from './crop
   // Config
   const HANDLE_RADIUS = 14;
   const HIT_RADIUS = 28; // Larger touch target
-  const ACCENT = '#00D4FF';
-  const ACCENT_GLOW = 'rgba(0, 212, 255, 0.4)';
-  const LINE_COLOR = 'rgba(0, 212, 255, 0.6)';
+  let ACCENT = '#10B981';
+  let ACCENT_GLOW = 'rgba(16, 185, 129, 0.4)';
+  let LINE_COLOR = 'rgba(16, 185, 129, 0.6)';
   const LINE_WIDTH = 2;
   const OVERLAY_COLOR = 'rgba(0, 0, 0, 0.35)';
-  const HANDLE_FILL = 'rgba(0, 212, 255, 0.15)';
-  const HANDLE_STROKE = ACCENT;
-  const HANDLE_ACTIVE_FILL = 'rgba(0, 212, 255, 0.35)';
+  let HANDLE_FILL = 'rgba(16, 185, 129, 0.12)';
+  let HANDLE_STROKE = ACCENT;
+  let HANDLE_ACTIVE_FILL = 'rgba(16, 185, 129, 0.24)';
 
   /**
    * Initialize the corner system.
@@ -239,6 +239,14 @@ import { cropHandlePositions, moveCropHandle, rectangleFromPoints } from './crop
 
   function draw() {
     if (!ctx || !overlayCanvas) return;
+    const theme = getComputedStyle(document.documentElement);
+    const rgb = theme.getPropertyValue('--accent-rgb').trim() || '16, 185, 129';
+    ACCENT = theme.getPropertyValue('--accent-primary').trim() || '#10B981';
+    ACCENT_GLOW = `rgba(${rgb}, 0.4)`;
+    LINE_COLOR = `rgba(${rgb}, 0.6)`;
+    HANDLE_FILL = theme.getPropertyValue('--accent-surface').trim();
+    HANDLE_ACTIVE_FILL = theme.getPropertyValue('--accent-surface-strong').trim();
+    HANDLE_STROKE = ACCENT;
     const w = overlayCanvas.width;
     const h = overlayCanvas.height;
 
@@ -278,7 +286,7 @@ import { cropHandlePositions, moveCropHandle, rectangleFromPoints } from './crop
       ctx.translate(point.x, point.y);
       const horizontal = edge % 2 === 0;
       ctx.fillStyle = activePointIndex === edge + 4 ? '#ffffff' : ACCENT;
-      ctx.strokeStyle = '#07333d';
+      ctx.strokeStyle = '#022C22';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(horizontal ? -18 : -6, horizontal ? -6 : -18, horizontal ? 36 : 12, horizontal ? 12 : 36, 5);

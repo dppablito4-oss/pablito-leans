@@ -1,13 +1,15 @@
 const CACHE_PREFIX = 'pablito-leans-';
-const CACHE_NAME = `${CACHE_PREFIX}v13`;
+const CACHE_NAME = `${CACHE_PREFIX}v14`;
 
 const STATIC_ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './css/workspace.css',
+  './css/themes.css',
   './js/app.js',
   './js/bootstrap.js',
+  './js/theme.js',
   './js/scanner.js',
   './js/corners.js',
   './js/crop-geometry.js',

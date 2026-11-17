@@ -1,0 +1,174 @@
+/* AMOLED is the default. Surface and accent tokens are shared by every theme. */
+:root {
+  color-scheme: dark;
+  --bg-app: #000000;
+  --bg-panel: #0B0E11;
+  --bg-card: #14181D;
+  --bg-card-hover: #1B2027;
+  --bg-canvas: #181A1F;
+  --canvas-dot: #2A2E39;
+  --border-subtle: #1F242B;
+  --border-card: #262C36;
+  --accent-primary: #10B981;
+  --accent-hover: #059669;
+  --accent-bright: #34D399;
+  --accent-surface: rgba(16, 185, 129, 0.12);
+  --accent-text-on-btn: #022C22;
+  --text-primary: #F3F4F6;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+  --accent-rgb: 16, 185, 129;
+  --accent-surface-strong: rgba(16, 185, 129, 0.24);
+  --warning: #FFAB40;
+  --warning-bg: rgba(255, 171, 64, 0.1);
+  --danger: #F87171;
+  --danger-bg: rgba(248, 113, 113, 0.1);
+  --danger-border: rgba(248, 113, 113, 0.25);
+  --overlay-bg: rgba(0, 0, 0, 0.72);
+  --compare-bg: rgba(11, 14, 17, 0.94);
+  --paper-shadow: 0 8px 25px rgba(0, 0, 0, 0.32);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 4px 24px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 8px 48px rgba(0, 0, 0, 0.48);
+
+  /* Compatibility with the existing component styles. */
+  --bg-primary: var(--bg-app);
+  --bg-secondary: var(--bg-panel);
+  --bg-surface: var(--bg-card);
+  --bg-surface-hover: var(--bg-card-hover);
+  --bg-surface-active: var(--accent-surface);
+  --accent: var(--accent-primary);
+  --accent-dark: var(--accent-hover);
+  --accent-gradient: var(--accent-primary);
+  --accent-glow: rgba(var(--accent-rgb), 0.15);
+  --accent-glow-strong: rgba(var(--accent-rgb), 0.22);
+  --success: var(--accent-bright);
+  --success-bg: var(--accent-surface);
+  --glass-bg: var(--bg-panel);
+  --glass-border: var(--border-subtle);
+  --shadow-glow: none;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-app: #F3F6F5;
+  --bg-panel: #FFFFFF;
+  --bg-card: #F1F5F3;
+  --bg-card-hover: #E6EEE9;
+  --bg-canvas: #E3EAE6;
+  --canvas-dot: #C4D1C9;
+  --border-subtle: #D8E2DC;
+  --border-card: #CBD8D0;
+  --accent-primary: #047857;
+  --accent-hover: #065F46;
+  --accent-bright: #047857;
+  --accent-surface: rgba(4, 120, 87, 0.08);
+  --accent-text-on-btn: #FFFFFF;
+  --text-primary: #14251D;
+  --text-secondary: #4B6155;
+  --text-muted: #607568;
+  --accent-rgb: 4, 120, 87;
+  --accent-surface-strong: rgba(4, 120, 87, 0.16);
+  --warning: #965900;
+  --warning-bg: rgba(150, 89, 0, 0.08);
+  --danger: #B42332;
+  --danger-bg: rgba(180, 35, 50, 0.07);
+  --danger-border: rgba(180, 35, 50, 0.22);
+  --overlay-bg: rgba(14, 30, 23, 0.38);
+  --compare-bg: rgba(255, 255, 255, 0.94);
+  --paper-shadow: 0 8px 25px rgba(20, 45, 31, 0.14);
+  --shadow-sm: 0 2px 8px rgba(20, 45, 31, 0.06);
+  --shadow-md: 0 4px 24px rgba(20, 45, 31, 0.1);
+  --shadow-lg: 0 8px 48px rgba(20, 45, 31, 0.16);
+}
+
+html, body { background: var(--bg-app); }
+:root.theme-switching *, :root.theme-switching *::before, :root.theme-switching *::after { transition: none !important; }
+body::before { display: none; }
+.app-header, .tabs-bar, .flow-nav { background: var(--bg-app); }
+.app-header { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.app-logo { filter: none; }
+.app-title { color: var(--accent-bright); background: none; -webkit-text-fill-color: currentColor; }
+.section-eyebrow { color: var(--accent-bright); }
+.tab.active { color: var(--accent-bright); }
+.tab__status--has-pages { background: var(--accent-primary); }
+.tab-add { color: var(--text-secondary); border-color: var(--border-card); }
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+.theme-toggle:hover { background: var(--bg-card-hover); color: var(--accent-bright); }
+.theme-toggle svg { width: 17px; height: 17px; }
+.theme-icon--moon { display: none; }
+:root[data-theme="light"] .theme-icon--sun { display: none; }
+:root[data-theme="light"] .theme-icon--moon { display: block; }
+
+.upload-zone { background: var(--bg-panel); border-color: var(--border-subtle); box-shadow: var(--shadow-lg); }
+.upload-zone::before { display: none; }
+.upload-zone:hover, .upload-zone.drag-over { background: var(--bg-card); border-color: var(--accent-primary); }
+.upload-zone__btn, .btn-primary, .enhance-button { background: var(--accent-primary); color: var(--accent-text-on-btn); box-shadow: none; }
+.upload-zone__btn:hover, .btn-primary:hover, .enhance-button:hover { background: var(--accent-hover); box-shadow: none; }
+.enhance-button[aria-pressed="true"]:hover { background: var(--accent-surface-strong); color: var(--accent-bright); }
+.btn-secondary, .upload-zone__btn.upload-zone__btn--secondary, .page-move { background: var(--bg-card); border-color: var(--border-card); color: var(--text-primary); }
+.btn-secondary:hover, .upload-zone__btn--secondary:hover, .page-move:hover { background: var(--bg-card-hover); }
+.btn-danger { border-color: var(--danger-border); }
+.btn-danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+.result-badge { background: var(--accent-surface); border-color: var(--accent-primary); color: var(--accent-bright); }
+.controls-panel { background: var(--bg-panel); }
+.flow-step.active { color: var(--accent-bright); }
+.flow-step.active span { color: var(--accent-text-on-btn); background: var(--accent-primary); }
+.filter-option.active { background: var(--accent-surface); color: var(--accent-bright); box-shadow: none; }
+.filter-option:not(.active):hover { background: var(--bg-card-hover); }
+.document-enhancement:has(.enhance-button[aria-pressed="true"]) { background: var(--accent-surface); border-color: var(--accent-primary); }
+.advanced-filters { background: var(--bg-card); border-color: var(--border-card); }
+.text-button, .slider-group output { color: var(--accent-primary); }
+.text-button[aria-pressed="true"] { color: var(--accent-bright); }
+.form-input, .form-select, .radio-group, .radio-group-horizontal { background-color: var(--bg-card); border-color: var(--border-card); }
+.form-input::placeholder { color: var(--text-muted); opacity: 1; }
+input, select { accent-color: var(--accent-primary); }
+.styled-slider { border-color: var(--border-card); }
+.styled-slider::-webkit-slider-thumb { box-shadow: none; background: var(--accent-primary); }
+.styled-slider::-moz-range-thumb { box-shadow: none; background: var(--accent-primary); }
+.styled-slider::-moz-range-track { background: var(--border-card); }
+
+.modal-overlay, .tab-confirm-overlay { background: var(--overlay-bg); }
+.modal-dialog, .tab-confirm-dialog, .toast { background: var(--bg-panel); border-color: var(--border-subtle); }
+.export-dialog .modal-header { background: var(--bg-panel); }
+.export-dialog .modal-footer { background: var(--bg-panel); }
+.export-preview { background: var(--bg-app); }
+.print-preview-stage { background-color: var(--bg-canvas); background-image: radial-gradient(var(--canvas-dot) 0.7px, transparent 0.7px); }
+.print-layout-settings { background: var(--bg-card); border-color: var(--border-card); }
+.format-selector .radio-label:has(input:checked) { background: var(--accent-surface); color: var(--accent-bright); box-shadow: inset 0 0 0 1px var(--accent-primary); }
+.scale-shortcut:hover, .scale-shortcut.active { background: var(--accent-surface); border-color: var(--accent-primary); color: var(--accent-bright); }
+.dni-guide { background: var(--accent-surface); }
+.is-error, [aria-invalid="true"] { border-color: var(--warning); }
+.print-layout-summary.is-error { background: var(--warning-bg); border-color: var(--warning); }
+
+.loader-overlay { background: var(--bg-app); }
+.loader-bg-glow { display: none; }
+.loader-card { background: var(--bg-card); border-color: var(--accent-primary); box-shadow: var(--shadow-md); }
+.scanner-doc { background: var(--bg-card-hover); }
+.scanner-line { background: var(--text-muted); }
+.loader-text h2 { background: none; color: var(--text-primary); -webkit-text-fill-color: currentColor; }
+.loader-progress { background: var(--bg-card); }
+.loader-progress__bar { background: var(--accent-primary); box-shadow: none; }
+::selection { background: var(--accent-surface-strong); color: var(--text-primary); }
+
+@media (max-width: 767px) {
+  .theme-toggle { margin-left: auto; }
+}
+@media (max-width: 480px) {
+  .theme-toggle { width: 36px; height: 36px; padding: 8px; }
+  .theme-toggle__label { display: none; }
+}

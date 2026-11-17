@@ -6,8 +6,8 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#07070d",
-  "theme_color": "#07070d",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "categories": ["productivity", "utilities"],
   "lang": "es",
   "icons": [

@@ -284,6 +284,10 @@ const App = (() => {
   // ======== Event Binding ========
 
   function bindEvents() {
+    window.addEventListener('themechange', () => {
+      Corners.draw();
+      if (printPlan && !dom.exportModal.classList.contains('hidden')) renderPrintPreview();
+    });
     // File selection
     dom.btnSelectFile.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2449,10 +2453,14 @@ const App = (() => {
         if (revision !== previewRevision) return;
         images.set(index, thumbnail);
       }
+      const theme = getComputedStyle(document.documentElement);
+      const guideColor = theme.getPropertyValue('--text-muted').trim();
+      const tagColor = theme.getPropertyValue('--accent-primary').trim();
+      const tagInk = theme.getPropertyValue('--accent-text-on-btn').trim();
       for (const box of sheet.items) {
         const fitted = fitImageToBox(pages[box.pageIndex], box, fitMode);
         ctx.drawImage(images.get(box.pageIndex), fitted.x * factor, fitted.y * factor, fitted.width * factor, fitted.height * factor);
-        ctx.strokeStyle = '#b6c5cc';
+        ctx.strokeStyle = guideColor;
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 4]);
         ctx.strokeRect(box.x * factor, box.y * factor, box.width * factor, box.height * factor);
@@ -2460,9 +2468,9 @@ const App = (() => {
         const label = box.side ? `${box.side} · Pág. ${box.pageIndex + 1}` : `${box.pageIndex + 1}`;
         ctx.font = '600 15px sans-serif';
         const labelWidth = ctx.measureText(label).width + 14;
-        ctx.fillStyle = '#0f5c66';
+        ctx.fillStyle = tagColor;
         ctx.fillRect(box.x * factor, box.y * factor, labelWidth, 24);
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = tagInk;
         ctx.fillText(label, box.x * factor + 7, box.y * factor + 17);
       }
     } catch (error) {

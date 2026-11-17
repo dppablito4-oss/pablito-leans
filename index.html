@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pablito Leans — Escáner de Documentos</title>
   <meta name="description" content="Escanea documentos desde tu celular o PC. Detecta bordes automáticamente, ajusta esquinas y descarga imágenes limpias y planas. Sin servidores, 100% privado.">
-  <meta name="theme-color" content="#07070d">
+  <meta name="theme-color" content="#000000">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdnjs.cloudflare.com; connect-src 'self' data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,8 +23,10 @@
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   <link rel="canonical" href="https://leans.sypablitodp.site/">
   <link rel="manifest" href="manifest.json">
+  <script src="js/theme.js"></script>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/workspace.css">
+  <link rel="stylesheet" href="css/themes.css">
 </head>
 <body>
 
@@ -33,6 +35,11 @@
     <img src="assets/favicon.svg" alt="Pablito Leans logo" class="app-logo">
     <h1 class="app-title">Pablito Leans</h1>
     <span class="app-subtitle">Escáner de Documentos</span>
+    <button id="btn-theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar a modo claro" title="Cambiar a modo claro">
+      <svg class="theme-icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
+      <svg class="theme-icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20.5 13A9 9 0 0 1 11 3.5 9 9 0 1 0 20.5 13Z"/></svg>
+      <span class="theme-toggle__label">Claro</span>
+    </button>
   </header>
 
   <!-- ============ DOCUMENT TABS ============ -->
