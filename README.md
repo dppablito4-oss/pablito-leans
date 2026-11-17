@@ -19,6 +19,8 @@ Herramienta web estática que permite escanear documentos directamente desde el 
   bordes para cortar vertical u horizontalmente, con modo rectangular
 - 🎛️ **Ajustes por página** de luz, contraste, fondo, saturación, balance de
   blancos, temperatura y nitidez; se conservan al recortar y pueden aplicarse a todas
+- ✨ **Mejorar documento** con gamma adaptativa y contraste local CLAHE sobre
+  luminosidad, intensidad regulable y reducción de ruido bilateral independiente
 - 📚 **Flujo por etapas** optimizado para móvil y vista de dos columnas en PC
 - 📥 **Exportación** a PDF, JPG y ZIP con selección de páginas
   mediante el administrador de descargas del navegador
@@ -114,6 +116,20 @@ permite revisar el detalle con zoom. Los ajustes de **Luz y limpieza** y
 **Color y nitidez** afectan a la página seleccionada, conservan el original y se
 mantienen al volver a recortar. **Restablecer** elimina los ajustes adicionales;
 **Original** también quita el filtro. Puedes copiar el acabado a todo el documento.
+
+**Mejorar documento** activa una mejora automática moderada. Regula su intensidad
+o usa **Quitar mejora automática** para desactivarla. **Reducir ruido** es
+independiente: déjalo en 0% para conservar toda la textura y los trazos finos.
+Ambos controles se guardan por página, se mantienen al recortar y se incluyen
+al aplicar el acabado a todas. Las páginas nuevas empiezan sin estos efectos.
+
+El procesamiento usa gamma estimada a partir de la luminosidad del papel,
+CLAHE limitado y protección de blancos y tinta negra. Funciona localmente
+con OpenCV.js. Las técnicas toman como referencia los ejercicios de
+[Image-Processing-OpenCV](https://github.com/GeorgeSeif/Image-Processing-OpenCV)
+y la documentación de OpenCV sobre
+[CLAHE](https://docs.opencv.org/4.x/d2/d74/tutorial_js_histogram_equalization.html)
+y [filtrado bilateral](https://docs.opencv.org/4.x/dd/d6a/tutorial_js_filtering.html).
 
 En **Recortar**, arrastra las esquinas para corregir perspectiva o los tiradores
 del centro de cada borde para cortar desde arriba, abajo, izquierda o derecha.

@@ -6,6 +6,7 @@
 
 
 import { adjustTonePixels, hasAdjustments, normalizeAdjustments } from './image-adjustments.js';
+import { enhanceDocumentRgb } from './document-enhancement.js';
 
   /**
    * Detect the largest quadrilateral contour in the image.
@@ -244,68 +245,54 @@ import { adjustTonePixels, hasAdjustments, normalizeAdjustments } from './image-
     const settings = normalizeAdjustments(options);
     const bgCleanVal = settings.bgClean;
     const satVal = settings.saturation;
+    const owned = [];
+    const own = value => { owned.push(value); return value; };
+    const mat = () => own(new cv.Mat());
+    try {
+      const rgb = mat();
+      cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+      const cleaned = mat();
+      if (bgCleanVal > 0) {
+        const background = mat(), divided = mat(), enhanced = mat();
+        cv.GaussianBlur(rgb, background, new cv.Size(51, 51), 0);
+        cv.divide(rgb, background, divided, 255.0);
+        divided.convertTo(enhanced, -1, 1.03, 3);
+        const blend = Math.pow(bgCleanVal / 100, 2) * 0.7;
+        cv.addWeighted(rgb, 1 - blend, enhanced, blend, 0, cleaned);
+      } else rgb.copyTo(cleaned);
 
-    const rgb = new cv.Mat();
-    cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+      if (settings.documentEnhance > 0 || settings.denoise > 0) {
+        const enhanced = own(enhanceDocumentRgb(cleaned, settings));
+        enhanced.copyTo(cleaned);
+      }
 
-    // 1. Background clean. The corrected image is blended with the original
-    // using an ease-in curve. Therefore 0 is exactly the source and the first
-    // half of the slider stays deliberately subtle.
-    let cleaned = new cv.Mat();
-    if (bgCleanVal > 0) {
-      const bg = new cv.Mat();
-      cv.GaussianBlur(rgb, bg, new cv.Size(51, 51), 0);
+      const result = mat();
+      if (satVal !== 50) {
+        const hsv = mat();
+        const channels = own(new cv.MatVector());
+        cv.cvtColor(cleaned, hsv, cv.COLOR_RGB2HSV);
+        cv.split(hsv, channels);
+        const saturation = own(channels.get(1));
+        const satScale = 1 + ((satVal - 50) / 50) * 0.25;
+        saturation.convertTo(saturation, -1, satScale, 0);
+        cv.merge(channels, hsv);
+        cv.cvtColor(hsv, result, cv.COLOR_HSV2RGB);
+      } else cleaned.copyTo(result);
 
-      const divided = new cv.Mat();
-      cv.divide(rgb, bg, divided, 255.0);
-
-      const enhanced = new cv.Mat();
-      divided.convertTo(enhanced, -1, 1.03, 3);
-      const blend = Math.pow(bgCleanVal / 100, 2) * 0.7;
-      cv.addWeighted(rgb, 1 - blend, enhanced, blend, 0, cleaned);
-
-      bg.delete(); divided.delete(); enhanced.delete();
-    } else {
-      rgb.copyTo(cleaned);
-    }
-
-    // 2. Saturation
-    let result = new cv.Mat();
-    if (satVal !== 50) {
-      const hsv = new cv.Mat();
-      cv.cvtColor(cleaned, hsv, cv.COLOR_RGB2HSV);
-      
-      const channels = new cv.MatVector();
-      cv.split(hsv, channels);
-      
-      const s = channels.get(1);
-      // 50 is neutral. The full slider only spans 75%–125% saturation so
-      // small movements do not cause abrupt or artificial colors.
-      const satScale = 1 + ((satVal - 50) / 50) * 0.25;
-      s.convertTo(s, -1, satScale, 0);
-      
-      cv.merge(channels, hsv);
-      cv.cvtColor(hsv, result, cv.COLOR_HSV2RGB);
-      
-      hsv.delete(); channels.delete(); s.delete();
-    } else {
-      cleaned.copyTo(result);
-    }
-
-    adjustTonePixels(result.data, settings);
-    if (settings.sharpness > 0) {
-      const blurred = new cv.Mat();
-      try {
+      adjustTonePixels(result.data, settings);
+      if (settings.sharpness > 0) {
+        const blurred = mat();
         cv.GaussianBlur(result, blurred, new cv.Size(0, 0), 1.1);
         const amount = settings.sharpness / 100 * 0.6;
         cv.addWeighted(result, 1 + amount, blurred, -amount, 0, result);
-      } finally { blurred.delete(); }
+      }
+      const rgba = mat();
+      cv.cvtColor(result, rgba, cv.COLOR_RGB2RGBA);
+      owned.splice(owned.indexOf(rgba), 1);
+      return rgba;
+    } finally {
+      for (let index = owned.length - 1; index >= 0; index--) owned[index].delete();
     }
-    const rgba = new cv.Mat();
-    cv.cvtColor(result, rgba, cv.COLOR_RGB2RGBA);
-
-    rgb.delete(); cleaned.delete(); result.delete();
-    return rgba;
   }
 
   // ---- Filter: Color (Enhanced) ----

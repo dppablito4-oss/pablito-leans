@@ -259,6 +259,16 @@
         </div>
 
         <div class="tools-heading"><span class="section-eyebrow">DALE EL ÚLTIMO TOQUE</span><h2>Mejora tu página</h2><p id="filter-status" role="status">Original · sin cambios de color</p></div>
+        <section class="document-enhancement" aria-label="Mejora automática del documento">
+          <button id="btn-enhance-document" type="button" class="enhance-button" aria-pressed="false" aria-describedby="enhancement-help">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 15l3 3 5-6"/></svg>
+            <span id="enhance-button-label">Mejorar documento</span>
+          </button>
+          <p id="enhancement-help">Equilibra la luz y mejora el contraste del texto conservando el color.</p>
+          <div class="slider-group"><label for="adj-document-enhance">Intensidad de mejora <output id="adj-document-enhance-value">0%</output></label><input type="range" id="adj-document-enhance" class="styled-slider" min="0" max="100" value="0"></div>
+          <div class="slider-group"><label for="adj-denoise">Reducir ruido <output id="adj-denoise-value">0%</output></label><input type="range" id="adj-denoise" class="styled-slider" min="0" max="100" value="0"></div>
+          <p class="enhancement-note">0% desactiva cada efecto. Compara con el original para elegir la intensidad.</p>
+        </section>
         <div class="filter-heading"><strong>Acabado</strong><span>Se aplica a esta página</span></div>
         <div class="filter-selector filter-selector--primary" id="filter-selector">
           <button class="filter-option active" data-filter="original" id="filter-original" type="button" aria-pressed="true"><span class="filter-sample" aria-hidden="true"></span><span><strong>Original</strong><small>Sin correcciones</small></span></button>

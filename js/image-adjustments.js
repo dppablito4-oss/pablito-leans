@@ -1,6 +1,6 @@
 export const NEUTRAL_ADJUSTMENTS = Object.freeze({
   bgClean: 0, saturation: 50, brightness: 0, contrast: 0,
-  warmth: 0, whiteBalance: 0, sharpness: 0
+  warmth: 0, whiteBalance: 0, sharpness: 0, documentEnhance: 0, denoise: 0
 });
 
 export function normalizeAdjustments(options = {}) {

@@ -238,8 +238,11 @@ const App = (() => {
     dom.cropReset = document.getElementById('btn-crop-reset');
     dom.resetAdjustments = document.getElementById('btn-reset-adjustments');
     dom.filterStatus = document.getElementById('filter-status');
+    dom.btnEnhanceDocument = document.getElementById('btn-enhance-document');
+    dom.enhanceButtonLabel = document.getElementById('enhance-button-label');
     const adjustmentIds = { bgClean: 'bg-clean', saturation: 'saturation', brightness: 'brightness',
-      contrast: 'contrast', warmth: 'warmth', whiteBalance: 'white-balance', sharpness: 'sharpness' };
+      contrast: 'contrast', warmth: 'warmth', whiteBalance: 'white-balance', sharpness: 'sharpness',
+      documentEnhance: 'document-enhance', denoise: 'denoise' };
     dom.adjustmentControls = Object.fromEntries(Object.entries(adjustmentIds).map(([key, id]) =>
       [key, { input: document.getElementById(`adj-${id}`), output: document.getElementById(`adj-${id}-value`) }]));
   }
@@ -435,6 +438,14 @@ const App = (() => {
       setManualControlValues(NEUTRAL_ADJUSTMENTS);
       scheduleManualFilter();
     });
+    dom.btnEnhanceDocument.addEventListener('click', () => {
+      const settings = readAdjustmentValues();
+      const active = settings.documentEnhance > 0 || settings.denoise > 0;
+      settings.documentEnhance = active ? 0 : 65;
+      settings.denoise = active ? 0 : 50;
+      setManualControlValues(settings);
+      scheduleManualFilter();
+    });
 
     // Filter buttons
     dom.filterBtns.forEach(btn => {
@@ -476,6 +487,9 @@ const App = (() => {
       } else if (key === 'warmth') output.textContent = value ? `${value > 0 ? '+' : ''}${value}` : 'Neutra';
       else output.textContent = ['brightness', 'contrast'].includes(key) ? `${value > 0 ? '+' : ''}${value}` : `${value}%`;
     });
+    const active = Number(dom.adjustmentControls.documentEnhance.input.value) > 0 || Number(dom.adjustmentControls.denoise.input.value) > 0;
+    dom.btnEnhanceDocument.setAttribute('aria-pressed', String(active));
+    dom.enhanceButtonLabel.textContent = active ? 'Quitar mejora automática' : 'Mejorar documento';
   }
 
   function readAdjustmentValues() {

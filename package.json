@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check js/app.js && node --check js/bootstrap.js && node --check js/scanner.js && node --check js/corners.js && node --check js/crop-geometry.js && node --check js/image-adjustments.js && node --check js/utils.js && node --check js/export/download.js && node --check js/export/layout-calculator.js && node --check js/export/print-sizes.js && node --check sw.js",
+    "check": "node --check js/app.js && node --check js/bootstrap.js && node --check js/scanner.js && node --check js/corners.js && node --check js/crop-geometry.js && node --check js/image-adjustments.js && node --check js/document-enhancement.js && node --check js/utils.js && node --check js/export/download.js && node --check js/export/layout-calculator.js && node --check js/export/print-sizes.js && node --check sw.js",
     "test": "node --test"
   },
   "engines": {
