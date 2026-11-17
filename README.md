@@ -17,7 +17,11 @@ Herramienta web estática que permite escanear documentos directamente desde el 
 - 📚 **Flujo por etapas** optimizado para móvil y vista de dos columnas en PC
 - 📥 **Exportación** a PDF, JPG y ZIP con selección de páginas
 - 📐 **Composición de impresión** con DNI, escala 195%, medidas personalizadas,
-  recomendación A0–A5 y cuadrículas de varias copias
+  recomendación A0–A5, vista previa de cada hoja y cuadrículas de varias copias
+- 🗂️ **Rellenado por página o por archivo**: repite cada original en su propia hoja
+  o reúne originales distintos en las hojas necesarias, conservando sus medidas
+- 🪪 **DNI con dos caras**: anverso arriba y reverso debajo en la misma hoja,
+  a tamaño normal o ampliado, con opción de intercambiar las caras
 - 📱 **Responsive** y compatible con cámaras de celular
 - 🔒 **Procesamiento local** — los documentos no se suben a un servidor
 - ⌨️ **Accesible por teclado** — pestañas, diálogos y ajuste fino de esquinas
@@ -73,6 +77,28 @@ npx serve .
 npm run check
 npm test
 ```
+
+## Preparar hojas para imprimir
+
+Abre **PDF → Tipo de salida PDF → Impresión**. Selecciona las páginas del
+documento y elige una distribución:
+
+- **Una por hoja**: un original centrado en cada hoja.
+- **Rellenar una hoja por cada página**: repite cada original hasta llenar su
+  propia hoja. Con `Copias por página = 0` se llena una hoja; con un número
+  concreto se generan esas copias, continuando en otra hoja cuando sea necesario.
+- **Todo el archivo en las hojas necesarias**: coloca cada original una sola vez,
+  en orden, sin reducir las medidas. Por ejemplo, a 5 × 5 cm en A4 con margen
+  de 10 mm y separación de 3 mm caben 15 piezas: 10 páginas ocupan una hoja
+  y 20 ocupan dos.
+- **DNI**: selecciona anverso y reverso como dos páginas consecutivas. Cada par
+  ocupa una misma hoja, una cara debajo de la otra. Puedes usar 100%, 195% o una
+  escala personalizada. La aplicación avisa si falta una cara o el par no cabe.
+
+La vista previa permite recorrer las hojas y muestra el total real del archivo
+exportado. Sus números y guías no se imprimen. Elige **tamaño real / 100%** en el
+diálogo de impresión para conservar las medidas. La composición se exporta en
+PDF; la descarga de imágenes conserva su funcionamiento habitual.
 
 ## 📜 Licencia
 

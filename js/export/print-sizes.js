@@ -60,7 +60,7 @@ export function getPaperSize(name, landscape = false) {
     : { name, width: paper[0], height: paper[1], landscape: false };
 }
 
-export function recommendPaper(width, height, margin = 0) {
+export function recommendPaper(width, height, margin = 0, orientation = 'auto') {
   const itemWidth = Number(width);
   const itemHeight = Number(height);
   const marginMm = Number(margin);
@@ -70,7 +70,7 @@ export function recommendPaper(width, height, margin = 0) {
   }
 
   for (const name of PAPER_ORDER) {
-    for (const landscape of [false, true]) {
+    for (const landscape of orientation === 'landscape' ? [true] : orientation === 'portrait' ? [false] : [false, true]) {
       const paper = getPaperSize(name, landscape);
       if (itemWidth + marginMm * 2 <= paper.width && itemHeight + marginMm * 2 <= paper.height) {
         return paper;

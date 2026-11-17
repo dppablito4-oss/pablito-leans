@@ -7,7 +7,7 @@
   <meta name="description" content="Escanea documentos desde tu celular o PC. Detecta bordes automáticamente, ajusta esquinas y descarga imágenes limpias y planas. Sin servidores, 100% privado.">
   <meta name="theme-color" content="#07070d">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdnjs.cloudflare.com; connect-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdnjs.cloudflare.com; connect-src 'self' data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
@@ -81,8 +81,9 @@
         <line x1="12" y1="3" x2="12" y2="15"/>
       </svg>
       <div class="upload-zone__text">
-        <h2>¿Qué quieres escanear?</h2>
-        <p>Todo se procesa localmente en tu dispositivo</p>
+        <span class="section-eyebrow">TU DOCUMENTO, LISTO EN MINUTOS</span>
+        <h2>Escanea. Ajusta. Imprime.</h2>
+        <p>De una foto a un documento limpio.<br>Captura con tu cámara o importa tus archivos.</p>
       </div>
       <div class="start-actions">
       <button class="upload-zone__btn upload-zone__btn--camera" id="btn-open-camera" type="button">
@@ -100,7 +101,11 @@
         Elegir imágenes o PDF
       </button>
       </div>
+      <div class="start-features" aria-label="Funciones disponibles">
+        <span>PDF e imágenes</span><span>Hojas con varias copias</span><span>DNI en una hoja</span>
+      </div>
       <p class="drop-hint">En PC también puedes arrastrar archivos aquí</p>
+      <span class="privacy-note">Procesamiento local · Tus archivos se quedan en tu dispositivo</span>
       <input type="file" accept="image/*,application/pdf" multiple class="upload-zone__input" id="file-input">
     </section>
 
@@ -315,18 +320,19 @@
 
   <!-- ============ UNIFIED EXPORT MODAL ============ -->
   <div class="modal-overlay hidden" id="export-modal-overlay" aria-hidden="true">
-    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+    <div class="modal-dialog export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
       <div class="modal-header">
-        <h3 id="export-modal-title">Exportar Documento</h3>
+        <div><span class="section-eyebrow">EL ÚLTIMO PASO</span><h3 id="export-modal-title">Prepara tu documento</h3></div>
         <button class="btn-close" id="export-modal-close" type="button" title="Cerrar" aria-label="Cerrar exportación">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body export-workspace">
+        <div class="export-settings">
         <!-- Export Format -->
         <div class="form-group">
-          <label>Formato de Archivo</label>
-          <div class="radio-group-horizontal">
+          <span class="field-label" id="export-format-label">Formato de archivo</span>
+          <div class="radio-group-horizontal format-selector" role="group" aria-labelledby="export-format-label">
             <label class="radio-label">
               <input type="radio" name="export-format" value="pdf" checked>
               <span>Documento PDF</span>
@@ -341,15 +347,16 @@
         <!-- Page Range -->
         <div class="form-group">
           <label for="export-page-range">Páginas a exportar</label>
-          <input type="text" id="export-page-range" class="form-input" placeholder="Ej: 1-3, 5 (Vacío = Todas)">
+          <input type="text" id="export-page-range" class="form-input" placeholder="Ej: 1-3, 5 (Vacío = Todas)" aria-describedby="export-range-help">
+          <p class="field-help" id="export-range-help">Vacío = todas las páginas del documento.</p>
         </div>
 
         <!-- Print Composition -->
         <div class="form-group" id="group-export-purpose">
           <label for="export-purpose">Tipo de salida PDF</label>
           <select id="export-purpose" class="form-select">
-            <option value="document" selected>Documento normal</option>
-            <option value="print">Composición para impresión</option>
+            <option value="document" selected>Documento · una página por hoja</option>
+            <option value="print">Impresión · medidas, copias y DNI</option>
           </select>
         </div>
 
@@ -358,8 +365,11 @@
             <label for="export-layout-mode">Distribución</label>
             <select id="export-layout-mode" class="form-select">
               <option value="single">Una por hoja</option>
-              <option value="fill">Llenar hoja con copias</option>
+              <option value="fill">Rellenar una hoja por cada página</option>
+              <option value="pack" selected>Todo el archivo en las hojas necesarias</option>
+              <option value="dni">DNI · anverso y reverso juntos</option>
             </select>
+            <p class="field-help" id="export-layout-help"></p>
           </div>
 
           <div class="form-group">
@@ -368,9 +378,15 @@
               <option value="dni">DNI / tarjeta (85.6 × 54 mm)</option>
               <option value="photo3x4">Foto 3 × 4 cm</option>
               <option value="photo4x4">Foto 4 × 4 cm</option>
-              <option value="square5">Cuadrado 5 × 5 cm</option>
+              <option value="square5" selected>Cuadrado 5 × 5 cm</option>
               <option value="custom">Medida personalizada</option>
             </select>
+          </div>
+
+          <div class="dni-guide hidden" id="group-dni-guide">
+            <strong>Dos caras. Una misma hoja.</strong>
+            <p>En el orden seleccionado: página 1 = anverso, página 2 = reverso. Con más páginas, se forman pares consecutivos.</p>
+            <button class="text-button" id="btn-dni-swap" type="button">Intercambiar anverso y reverso</button>
           </div>
 
           <div class="custom-size-row hidden" id="group-custom-print-size">
@@ -394,12 +410,15 @@
             <label id="group-print-gap">Separación
               <span class="input-suffix"><input type="number" id="export-print-gap" class="form-input" min="0" max="100" step="0.5" value="3"><span>mm</span></span>
             </label>
-            <label id="group-print-copies">Copias (0 = llenar una hoja)
+            <label id="group-print-copies">Copias por página
               <input type="number" id="export-print-copies" class="form-input" min="0" max="1000" step="1" value="0" title="0 llena una hoja">
             </label>
           </div>
-
-          <div class="print-layout-summary" id="print-layout-summary" aria-live="polite"></div>
+          <p class="field-help hidden" id="print-copies-help">0 = repetir cada página hasta llenar su propia hoja. Un número mayor indica cuántas copias hacer de cada página.</p>
+          <div class="scale-shortcuts" role="group" aria-label="Escalas rápidas">
+            <button class="scale-shortcut active" type="button" data-print-scale="100" aria-pressed="true">Normal · 100%</button>
+            <button class="scale-shortcut" type="button" data-print-scale="195" aria-pressed="false">Ampliado · 195%</button>
+          </div>
         </div>
 
         <!-- Page Size -->
@@ -423,11 +442,11 @@
           <div class="radio-group">
             <label class="radio-label">
               <input type="radio" name="export-fit" value="contain" checked>
-              <span>Respetar proporción (Bordes blancos)</span>
+              <span>Conservar proporciones · sin recortar</span>
             </label>
             <label class="radio-label">
               <input type="radio" name="export-fit" value="cover">
-              <span>Cubrir hoja (Deformar)</span>
+              <span>Estirar al tamaño exacto</span>
             </label>
           </div>
         </div>
@@ -438,15 +457,15 @@
           <div class="radio-group">
             <label class="radio-label">
               <input type="radio" name="export-orientation" value="auto" checked>
-              <span>Automático (Según imagen)</span>
+              <span>Automática</span>
             </label>
             <label class="radio-label">
               <input type="radio" name="export-orientation" value="portrait">
-              <span>Forzar Vertical</span>
+              <span>Vertical</span>
             </label>
             <label class="radio-label">
               <input type="radio" name="export-orientation" value="landscape">
-              <span>Forzar Horizontal</span>
+              <span>Horizontal</span>
             </label>
           </div>
         </div>
@@ -465,8 +484,24 @@
             </label>
           </div>
         </div>
+        </div>
+        <aside class="export-preview" id="export-preview" aria-label="Vista previa de impresión">
+          <div class="preview-heading"><div><span class="section-eyebrow">ANTES DE DESCARGAR</span><h4>Así quedará tu hoja</h4></div><span class="preview-paper-label" id="preview-paper-label">A4</span></div>
+          <div class="print-layout-summary" id="print-layout-summary" aria-live="polite"></div>
+          <div class="print-preview-stage" id="print-preview-stage">
+            <canvas id="print-preview-canvas" width="630" height="891" role="img" aria-label="Vista previa de la hoja a imprimir"></canvas>
+            <p class="preview-empty hidden" id="preview-empty">Elige medidas válidas para ver tu hoja.</p>
+          </div>
+          <div class="preview-navigation">
+            <button type="button" id="preview-prev" aria-label="Ver hoja anterior">←</button>
+            <span id="preview-sheet-counter" aria-live="polite">Hoja 1 de 1</span>
+            <button type="button" id="preview-next" aria-label="Ver hoja siguiente">→</button>
+          </div>
+          <p class="field-help preview-note">Los números y las guías solo aparecen en la vista previa. Al imprimir, elige tamaño real o escala 100%.</p>
+        </aside>
       </div>
       <div class="modal-footer">
+        <p class="export-footer-status" id="export-footer-status" role="status"></p>
         <button class="btn btn-secondary" id="export-modal-cancel" type="button">Cancelar</button>
         <button class="btn btn-primary" id="export-modal-confirm" type="button">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
