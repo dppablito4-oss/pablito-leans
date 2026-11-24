@@ -9,6 +9,7 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdnjs.cloudflare.com; connect-src 'self' data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <!-- Open Graph -->
@@ -465,9 +466,12 @@
             <select id="export-print-unit" class="form-select" aria-label="Unidad de medida">
               <option value="mm">mm</option>
               <option value="cm" selected>cm</option>
+              <option value="m">m</option>
               <option value="in">pulgadas</option>
             </select>
           </div>
+
+          <button class="text-button hidden" id="btn-canvas-from-piece" type="button">Crear lienzo con esta medida (sin margen)</button>
 
           <div class="print-options-grid">
             <label>Escala
@@ -501,8 +505,34 @@
             <option value="A2">A2 (420 × 594 mm)</option>
             <option value="A1">A1 (594 × 841 mm)</option>
             <option value="A0">A0 (841 × 1189 mm)</option>
+            <option value="ARCH_E">ARCH E (914.4 × 1219.2 mm)</option>
+            <option value="custom">Personalizado · hasta 5 × 5 metros</option>
             <option value="original">Original (Sin reajustar tamaño)</option>
           </select>
+          <div class="custom-size-row hidden" id="group-custom-paper">
+            <label for="export-paper-width">Ancho<input type="number" id="export-paper-width" class="form-input" min="0.1" step="any" value="80" inputmode="decimal"></label>
+            <span aria-hidden="true">×</span>
+            <label for="export-paper-height">Alto<input type="number" id="export-paper-height" class="form-input" min="0.1" step="any" value="200" inputmode="decimal"></label>
+            <select id="export-paper-unit" class="form-select" aria-label="Unidad del lienzo"><option value="mm">mm</option><option value="cm" selected>cm</option><option value="m">m</option><option value="in">pulgadas</option></select>
+            <p class="field-help custom-paper-help">Medida real de la página del PDF. Máximo 500 × 500 cm. Ancho y alto se respetan tal como los escribes.</p>
+            <button class="text-button" id="btn-piece-from-canvas" type="button">Usar todo el lienzo para cada página</button>
+          </div>
+        </div>
+
+        <div class="form-group hidden" id="group-print-output">
+          <label for="export-print-output">Preparar para imprimir</label>
+          <select id="export-print-output" class="form-select">
+            <option value="full">Lienzo completo · una página PDF por lienzo</option>
+            <option value="plotter">Plóter · tramos de hasta 90 cm de ancho</option>
+            <option value="A4">Mosaico en A4 · montar a tamaño real</option>
+            <option value="A3">Mosaico en A3 · montar a tamaño real</option>
+            <option value="ARCH_E">Mosaico en ARCH E</option>
+          </select>
+          <p class="field-help" id="print-output-help">El PDF conserva la medida del lienzo. Para el plóter de 90 cm, elige tramos si el ancho la supera. ARCH E mide 91.44 cm de ancho.</p>
+          <div class="print-options-grid hidden" id="group-tile-options">
+            <label>Solape entre tramos (mm)<input id="export-tile-overlap" type="number" class="form-input" min="0" max="50" step="any" value="5"></label>
+            <label id="group-tile-margin">Margen de cada hoja (mm)<input id="export-tile-margin" type="number" class="form-input" min="0" max="50" step="any" value="5"></label>
+          </div>
         </div>
 
         <!-- Image Fit -->

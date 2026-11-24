@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getPaperSize,
+  getCustomPaper,
   recommendPaper,
   resolvePrintSize,
   toMillimeters
 } from '../js/export/print-sizes.js';
-import { calculateGrid, createPlacements, createPrintPlan, fitImageToBox } from '../js/export/layout-calculator.js';
+import { calculateGrid, createPlacements, createPrintPlan, createOutputPlan, fitImageToBox } from '../js/export/layout-calculator.js';
 
 test('physical units and DNI scaling are exact', () => {
   assert.equal(toMillimeters(5, 'cm'), 50);
@@ -154,4 +155,83 @@ test('preview and PDF fitting preserve proportions or stretch to an exact box', 
   const box = { x: 10, y: 20, width: 50, height: 50 };
   assert.deepEqual(fitImageToBox({ width: 200, height: 100 }, box), { x: 10, y: 32.5, width: 50, height: 25 });
   assert.deepEqual(fitImageToBox({ width: 200, height: 100 }, box, 'cover'), box);
+});
+
+const customPlan = (width = 80, height = 200) => {
+  const paper = getCustomPaper({ width, height, unit: 'cm' });
+  return createPrintPlan({ pageIndices: [0], item: paper, paper, mode: 'single', margin: 0 });
+};
+
+test('80 × 200 cm is the actual canvas, independent of standard paper and image orientation', () => {
+  const plan = customPlan();
+  assert.equal(plan.paper.width, 800);
+  assert.equal(plan.paper.height, 2000);
+  assert.deepEqual(plan.sheets[0].items[0], { x: 0, y: 0, width: 800, height: 2000, pageIndex: 0 });
+  const horizontal = customPlan(200, 80);
+  assert.equal(horizontal.paper.width, 2000);
+  assert.equal(horizontal.paper.height, 800);
+  assert.equal(horizontal.paper.landscape, true);
+});
+
+test('canvas and scaled pieces accept 5 m exactly and reject excess, empty and nonfinite input', () => {
+  assert.equal(getCustomPaper({ width: 5, height: 5, unit: 'm' }).width, 5000);
+  assert.equal(resolvePrintSize({ preset: 'custom', width: 250, height: 250, unit: 'cm', scale: 200 }).height, 5000);
+  for (const width of [500.01, 0, '', -1, Infinity, NaN]) {
+    assert.throws(() => getCustomPaper({ width, height: 200 }), /medida|5 m/);
+  }
+  assert.throws(() => resolvePrintSize({ preset: 'custom', width: 500, height: 200, unit: 'cm', scale: 101 }), /5 m/);
+  assert.throws(() => createPrintPlan({ pageIndices: [0], item: { width: 5001, height: 10 } }), /5 m/);
+});
+
+test('plotter preserves a narrow long canvas and splits wide ones into strips no wider than 90 cm', () => {
+  const narrow = createOutputPlan(customPlan(), { output: 'plotter' });
+  assert.equal(narrow.sheets.length, 1);
+  assert.equal(narrow.sheets[0].paper.width, 800);
+  assert.equal(narrow.sheets[0].paper.height, 2000);
+  const wide = createOutputPlan(customPlan(200, 80), { output: 'plotter', overlap: 5 });
+  assert.equal(wide.sheets.length, 3);
+  assert.deepEqual(wide.sheets.map(sheet => sheet.paper.width), [900, 900, 210]);
+  assert.deepEqual(wide.sheets.map(sheet => sheet.items[0].x), [0, -895, -1790]);
+  assert.ok(wide.sheets.every(sheet => sheet.items[0].width === 2000 && sheet.paper.width <= 900));
+  const largest = createOutputPlan(customPlan(500, 500), { output: 'plotter' });
+  assert.equal(largest.sheets.length, 6);
+  assert.ok(largest.sheets.every(sheet => sheet.paper.height === 5000));
+});
+
+test('A4 mosaic covers the canvas with overlap, blank margins, and no rescaling', () => {
+  const plan = createOutputPlan(customPlan(), { output: 'A4', overlap: 5, tileMargin: 5 });
+  assert.equal(plan.columns, 5);
+  assert.equal(plan.rows, 8);
+  assert.equal(plan.sheets.length, 40);
+  for (const sheet of plan.sheets) {
+    assert.equal(sheet.paper.width, 210);
+    assert.equal(sheet.paper.height, 297);
+    assert.equal(sheet.clip.x, 5);
+    assert.equal(sheet.clip.y, 5);
+    assert.ok(sheet.clip.width <= 200 && sheet.clip.height <= 287);
+    assert.equal(sheet.items[0].width, 800);
+    assert.equal(sheet.items[0].height, 2000);
+    assert.equal(sheet.items[0].x, 5 - sheet.column * 195);
+    assert.equal(sheet.items[0].y, 5 - sheet.row * 282);
+  }
+  assert.equal(createOutputPlan(customPlan(), { output: 'A3', overlap: 5, tileMargin: 5 }).sheets.length, 15);
+});
+
+test('ARCH E stays distinct from the plotter 90 cm limit', () => {
+  const paper = getPaperSize('ARCH_E');
+  assert.equal(paper.width, 914.4);
+  assert.equal(paper.height, 1219.2);
+  const plan = createPrintPlan({ pageIndices: [0], item: paper, paper, mode: 'single', margin: 0 });
+  assert.equal(createOutputPlan(plan, { output: 'plotter' }).sheets.length, 2);
+});
+
+test('tiling rejects excessive work before allocating output and validates overlap', () => {
+  const large = customPlan(500, 500);
+  assert.throws(() => createOutputPlan({ ...large, sheets: [...large.sheets, ...large.sheets], totalItems: 2 }, { output: 'A4' }), /500 hojas/);
+  for (const overlap of [-1, 51, Infinity]) {
+    assert.throws(() => createOutputPlan(customPlan(), { output: 'plotter', overlap }), /Solape|solape/);
+  }
+  assert.throws(() => createOutputPlan(customPlan(0.1, 100), { output: 'plotter', overlap: 5 }), /área útil/);
+  const plan = customPlan();
+  assert.equal(createOutputPlan(plan), plan);
 });

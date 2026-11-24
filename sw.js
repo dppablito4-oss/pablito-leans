@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'pablito-leans-';
-const CACHE_NAME = `${CACHE_PREFIX}v15`;
+const CACHE_NAME = `${CACHE_PREFIX}v16`;
 
 const STATIC_ASSETS = [
   './',
@@ -58,6 +58,7 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+  if (!['http:', 'https:'].includes(url.protocol)) return;
   if (url.origin !== self.location.origin) {
     event.respondWith(staleWhileRevalidate(request, event));
     return;

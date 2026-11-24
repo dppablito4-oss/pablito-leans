@@ -7,8 +7,8 @@
 import { Scanner } from './scanner.js';
 import { Corners } from './corners.js';
 import { fitImageDimensions, parsePageRange } from './utils.js';
-import { resolvePrintSize } from './export/print-sizes.js';
-import { createPrintPlan, fitImageToBox } from './export/layout-calculator.js';
+import { resolvePrintSize, getCustomPaper, ISO_SIZES_MM, ARCH_E_MM, PLOTTER_WIDTH_MM } from './export/print-sizes.js';
+import { createPrintPlan, createOutputPlan, fitImageToBox } from './export/layout-calculator.js';
 import { downloadBlob } from './export/download.js';
 import { NEUTRAL_ADJUSTMENTS, normalizeAdjustments } from './image-adjustments.js';
 import { createPanZoomViewport } from './pan-zoom.js';
@@ -49,6 +49,7 @@ const App = (() => {
   let cameraTorchEnabled = false;
   let manualFilterTimer = null;
   let printPlan = null;
+  let isExporting = false;
   let previewSheetIndex = 0;
   let previewRevision = 0;
   let dniSwapped = false;
@@ -180,6 +181,15 @@ const App = (() => {
     dom.btnExportConfirm = document.getElementById('export-modal-confirm');
     dom.exportPageRange = document.getElementById('export-page-range');
     dom.exportPageSize = document.getElementById('export-page-size');
+    for (const [key, id] of Object.entries({
+      groupCustomPaper: 'group-custom-paper', exportPaperWidth: 'export-paper-width',
+      exportPaperHeight: 'export-paper-height', exportPaperUnit: 'export-paper-unit',
+      btnCanvasFromPiece: 'btn-canvas-from-piece', btnPieceFromCanvas: 'btn-piece-from-canvas',
+      groupPrintOutput: 'group-print-output', exportPrintOutput: 'export-print-output',
+      groupTileOptions: 'group-tile-options', exportTileOverlap: 'export-tile-overlap',
+      exportTileMargin: 'export-tile-margin', groupTileMargin: 'group-tile-margin',
+      printOutputHelp: 'print-output-help'
+    })) dom[key] = document.getElementById(id);
     dom.exportPurpose = document.getElementById('export-purpose');
     dom.groupExportPurpose = document.getElementById('group-export-purpose');
     dom.groupPrintLayout = document.getElementById('group-print-layout');
@@ -413,6 +423,30 @@ const App = (() => {
       dniSwapped = !dniSwapped;
       updateExportModalUi();
     });
+    dom.btnCanvasFromPiece.addEventListener('click', () => {
+      try {
+        const item = readPrintItem();
+        dom.exportPageSize.value = 'custom';
+        dom.exportPaperUnit.value = 'mm';
+        dom.exportPaperWidth.value = item.width;
+        dom.exportPaperHeight.value = item.height;
+        dom.exportPrintMargin.value = '0';
+        updateExportModalUi();
+      } catch (error) { showToast(error.message, 'warning'); }
+    });
+    dom.btnPieceFromCanvas.addEventListener('click', () => {
+      try {
+        const paper = readCustomPaper();
+        dom.exportPrintPreset.value = 'custom';
+        dom.exportPrintUnit.value = 'mm';
+        dom.exportPrintWidth.value = paper.width;
+        dom.exportPrintHeight.value = paper.height;
+        dom.exportPrintScale.value = '100';
+        dom.exportPrintMargin.value = '0';
+        dom.exportLayoutMode.value = 'single';
+        updateExportModalUi();
+      } catch (error) { showToast(error.message, 'warning'); }
+    });
     dom.previewPrev.addEventListener('click', () => { previewSheetIndex--; renderPrintPreview(); });
     dom.previewNext.addEventListener('click', () => { previewSheetIndex++; renderPrintPreview(); });
     [
@@ -425,7 +459,9 @@ const App = (() => {
       dom.exportPrintScale,
       dom.exportPrintMargin,
       dom.exportPrintGap,
-      dom.exportPrintCopies
+      dom.exportPrintCopies,
+      dom.exportPaperWidth, dom.exportPaperHeight, dom.exportPaperUnit,
+      dom.exportPrintOutput, dom.exportTileOverlap, dom.exportTileMargin
     ].forEach(control => {
       control?.addEventListener('input', updateExportModalUi);
       control?.addEventListener('change', updateExportModalUi);
@@ -2296,6 +2332,14 @@ const App = (() => {
     }
     const pageSize = dom.exportPageSize ? dom.exportPageSize.value : 'A4';
     const isOriginal = pageSize === 'original';
+    const isCustom = pageSize === 'custom';
+    const output = dom.exportPrintOutput.value;
+    dom.groupCustomPaper.classList.toggle('hidden', !isCustom);
+    dom.btnPieceFromCanvas.classList.toggle('hidden', !isPrintLayout);
+    dom.btnCanvasFromPiece.classList.toggle('hidden', dom.exportPrintPreset.value !== 'custom');
+    dom.groupPrintOutput.classList.toggle('hidden', !isPrintLayout);
+    dom.groupTileOptions.classList.toggle('hidden', output === 'full');
+    dom.groupTileMargin.classList.toggle('hidden', output === 'plotter');
 
     // Show/hide groups
     if (format === 'pdf') {
@@ -2336,7 +2380,7 @@ const App = (() => {
       dom.groupOrientation.classList.add('hidden');
     } else {
       dom.groupImageFit.classList.remove('hidden');
-      dom.groupOrientation.classList.remove('hidden');
+      dom.groupOrientation.classList.toggle('hidden', isCustom);
     }
 
     dom.btnExportConfirm.disabled = false;
@@ -2346,6 +2390,11 @@ const App = (() => {
       dom.exportRangeHelp.textContent = `${selected.length} de ${currentTab().scannedPages.length} páginas seleccionadas. Vacío = todas.`;
       dom.exportPageRange.setAttribute('aria-invalid', 'false');
       dom.exportFooterStatus.textContent = `${selected.length} página(s) seleccionada(s)`;
+      if (isCustom) {
+        const paper = readCustomPaper();
+        dom.exportFooterStatus.textContent += ` · ${paper.width / 10} × ${paper.height / 10} cm`;
+        if (format !== 'pdf') dom.exportFooterStatus.textContent += ' · JPG limitado a 4096 px / 16 MP';
+      }
       if (dniMode && selected.length >= 2) {
         const [first, second] = dniSwapped ? [selected[1], selected[0]] : selected;
         dom.dniGuide.querySelector('p').textContent = `Página ${first + 1} arriba (anverso) y página ${second + 1} debajo (reverso). Con más páginas se forman pares consecutivos, uno por hoja.`;
@@ -2353,7 +2402,6 @@ const App = (() => {
       if (isPrintLayout) updatePrintLayoutSummary();
       else { printPlan = null; previewRevision++; }
     } catch (error) {
-      dom.exportPageRange.setAttribute('aria-invalid', 'true');
       showPrintConfigurationError(error);
     }
 
@@ -2361,6 +2409,7 @@ const App = (() => {
     if (confirmText) {
       confirmText.textContent = format === 'pdf' ? 'Generar PDF' : 'Descargar';
     }
+    if (isExporting) dom.btnExportConfirm.disabled = true;
   }
 
   function readOrientationMode() {
@@ -2380,23 +2429,33 @@ const App = (() => {
         const start = Number(match?.[1]);
         const end = Number(match?.[2] || match?.[1]);
         if (!match || start < 1 || end > total || start > end) {
+          dom.exportPageRange.setAttribute('aria-invalid', 'true');
           throw new RangeError(`Usa páginas entre 1 y ${total}. Por ejemplo: 1-3, 5.`);
         }
       }
     }
     const indices = parsePageRange(range, total);
+    dom.exportPageRange.setAttribute('aria-invalid', String(!indices.length));
     if (!indices.length) throw new RangeError('No hay páginas seleccionadas.');
     return indices;
   }
 
-  function buildPrintConfiguration() {
-    const item = resolvePrintSize({
+  function readCustomPaper() {
+    return getCustomPaper({ width: dom.exportPaperWidth.value, height: dom.exportPaperHeight.value, unit: dom.exportPaperUnit.value });
+  }
+
+  function readPrintItem() {
+    return resolvePrintSize({
       preset: dom.exportPrintPreset.value,
       width: dom.exportPrintWidth.value,
       height: dom.exportPrintHeight.value,
       unit: dom.exportPrintUnit.value,
       scale: dom.exportPrintScale.value
     });
+  }
+
+  function buildPrintConfiguration() {
+    const item = readPrintItem();
     if (!dom.exportPrintMargin.value) throw new RangeError('Completa el margen. Puedes usar 0.');
     if (dom.exportLayoutMode.value !== 'single' && !dom.exportPrintGap.value) throw new RangeError('Completa la separación. Puedes usar 0.');
     if (dom.exportLayoutMode.value === 'fill' && !dom.exportPrintCopies.value) throw new RangeError('Completa las copias. Usa 0 para llenar una hoja.');
@@ -2406,12 +2465,15 @@ const App = (() => {
         [indices[index], indices[index + 1]] = [indices[index + 1], indices[index]];
       }
     }
-    return createPrintPlan({
+    const plan = createPrintPlan({
       pageIndices: indices, item, mode: dom.exportLayoutMode.value,
-      paper: dom.exportPageSize.value, orientation: readOrientationMode(),
+      paper: dom.exportPageSize.value === 'custom' ? readCustomPaper() : dom.exportPageSize.value,
+      orientation: readOrientationMode(),
       margin: dom.exportPrintMargin.value, gap: dom.exportPrintGap.value,
       copies: dom.exportPrintCopies.value
     });
+    return createOutputPlan(plan, { output: dom.exportPrintOutput.value,
+      overlap: dom.exportTileOverlap.value, tileMargin: dom.exportTileMargin.value });
   }
 
   function updatePrintLayoutSummary() {
@@ -2426,6 +2488,16 @@ const App = (() => {
         `<div class="print-total"><strong>${sheets}</strong><span>${sheets === 1 ? 'hoja de salida' : 'hojas de salida'}</span></div>` +
         `<p>${config.item.width.toFixed(2)} × ${config.item.height.toFixed(2)} mm por ${config.mode === 'dni' ? 'cara' : 'pieza'} · ${config.totalItems} piezas en total</p>` +
         `<p>${gridLabel}</p>`;
+      const canvasLabel = `${config.paper.width / 10} × ${config.paper.height / 10} cm`;
+      const canvasInfo = document.createElement('p');
+      canvasInfo.textContent = `Lienzo: ${canvasLabel}` + (config.output ? ` · Montaje: ${config.columns} columnas × ${config.rows} filas · solape ${config.overlap} mm` : '');
+      dom.printLayoutSummary.append(canvasInfo);
+      dom.printOutputHelp.textContent = config.output === 'plotter'
+        ? 'Tramos de hasta 90 cm de ancho, a tamaño real. El largo conserva el del lienzo; comprueba el largo admitido por tu plóter.'
+        : config.output ? 'Imprime al 100%. Monta de izquierda a derecha y de arriba abajo, haciendo coincidir el solape. El margen de cada hoja queda en blanco.'
+          : config.paper.width > PLOTTER_WIDTH_MM
+            ? 'Este lienzo supera los 90 cm de ancho del plóter. Elige tramos de plóter para imprimirlo a tamaño real. ARCH E mide 91.44 cm.'
+            : 'El PDF conserva el tamaño del lienzo. El plóter admite hasta 90 cm de ancho. ARCH E mide 91.44 cm y requiere tramos en ese equipo.';
       dom.printLayoutSummary.classList.remove('is-error');
       dom.exportFooterStatus.textContent = `${sheets} ${sheets === 1 ? 'hoja' : 'hojas'} · ${config.paper.name} · ${config.totalItems} piezas`;
       renderPrintPreview();
@@ -2482,17 +2554,18 @@ const App = (() => {
     const sheet = config.sheets[previewSheetIndex];
     dom.previewPrev.disabled = previewSheetIndex === 0;
     dom.previewNext.disabled = previewSheetIndex === config.sheets.length - 1;
-    dom.previewCounter.textContent = `Hoja ${previewSheetIndex + 1} de ${config.sheets.length}`;
-    dom.previewPaperLabel.textContent = `${config.paper.name} · ${config.paper.landscape ? 'Horizontal' : 'Vertical'}`;
+    const paper = sheet.paper || config.paper;
+    dom.previewCounter.textContent = `Hoja ${previewSheetIndex + 1} de ${config.sheets.length}` + (sheet.clip ? ` · F${sheet.row + 1} C${sheet.column + 1}` : '');
+    dom.previewPaperLabel.textContent = `${paper.name} · ${paper.width / 10} × ${paper.height / 10} cm`;
     dom.previewCanvas.classList.remove('hidden');
     dom.previewEmpty.classList.add('hidden');
     dom.previewCanvas.setAttribute('aria-label', `Hoja ${previewSheetIndex + 1} de ${config.sheets.length}, ${sheet.items.length} piezas. Páginas: ${[...new Set(sheet.items.map(box => box.pageIndex + 1))].join(', ')}.`);
-    const factor = 1000 / Math.max(config.paper.width, config.paper.height);
+    const factor = 1000 / Math.max(paper.width, paper.height);
     const canvas = dom.previewCanvas;
-    canvas.width = Math.round(config.paper.width * factor);
-    canvas.height = Math.round(config.paper.height * factor);
-    const paperKey = `${config.paper.name}-${config.paper.width}-${config.paper.height}`;
-    dom.previewStage.dataset.orientation = config.paper.landscape ? 'landscape' : 'portrait';
+    canvas.width = Math.max(1, Math.round(paper.width * factor));
+    canvas.height = Math.max(1, Math.round(paper.height * factor));
+    const paperKey = `${paper.name}-${paper.width}-${paper.height}`;
+    dom.previewStage.dataset.orientation = paper.landscape ? 'landscape' : 'portrait';
     printViewport.setContent(canvas, { width: canvas.width, height: canvas.height, reset: paperKey !== previewPaperKey });
     previewPaperKey = paperKey;
     const ctx = canvas.getContext('2d');
@@ -2501,20 +2574,22 @@ const App = (() => {
     const pages = currentTab().scannedPages;
     const fitMode = Array.from(dom.exportFitOptions).find(option => option.checked)?.value || 'contain';
     try {
-      const images = new Map();
-      // Decode one source at a time to keep large scans manageable on phones.
-      for (const index of new Set(sheet.items.map(box => box.pageIndex))) {
-        const thumbnail = await loadPreviewImage(pages[index]);
-        if (revision !== previewRevision) return;
-        images.set(index, thumbnail);
-      }
       const theme = getComputedStyle(document.documentElement);
       const guideColor = theme.getPropertyValue('--text-muted').trim();
       const tagColor = theme.getPropertyValue('--accent-primary').trim();
       const tagInk = theme.getPropertyValue('--accent-text-on-btn').trim();
       for (const box of sheet.items) {
+        const thumbnail = await loadPreviewImage(pages[box.pageIndex]);
+        if (revision !== previewRevision) return;
+        ctx.save();
+        if (sheet.clip) {
+          const clip = sheet.clip;
+          ctx.beginPath();
+          ctx.rect(clip.x * factor, clip.y * factor, clip.width * factor, clip.height * factor);
+          ctx.clip();
+        }
         const fitted = fitImageToBox(pages[box.pageIndex], box, fitMode);
-        ctx.drawImage(images.get(box.pageIndex), fitted.x * factor, fitted.y * factor, fitted.width * factor, fitted.height * factor);
+        ctx.drawImage(thumbnail, fitted.x * factor, fitted.y * factor, fitted.width * factor, fitted.height * factor);
         ctx.strokeStyle = guideColor;
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 4]);
@@ -2527,6 +2602,7 @@ const App = (() => {
         ctx.fillRect(box.x * factor, box.y * factor, labelWidth, 24);
         ctx.fillStyle = tagInk;
         ctx.fillText(label, box.x * factor + 7, box.y * factor + 17);
+        ctx.restore();
       }
     } catch (error) {
       if (revision === previewRevision) showPrintConfigurationError(error);
@@ -2534,36 +2610,47 @@ const App = (() => {
   }
 
   async function confirmExport() {
+    if (isExporting) return;
     const tab = currentTab();
     if (tab.scannedPages.length === 0) return;
+    isExporting = true;
     dom.btnExportConfirm.disabled = true;
-    try { await settlePageFilters(); }
-    catch (error) { showToast(error.message, 'error'); dom.btnExportConfirm.disabled = false; return; }
-    dom.btnExportConfirm.disabled = false;
-    if (currentTab().id !== tab.id || dom.exportModal.classList.contains('hidden')) return;
+    try {
+      try { await settlePageFilters(); }
+      catch (error) { showToast(error.message, 'error'); return; }
+      if (currentTab().id !== tab.id || dom.exportModal.classList.contains('hidden')) return;
 
-    let format = 'pdf';
-    dom.exportFormatOptions.forEach(opt => { if (opt.checked) format = opt.value; });
+      let format = 'pdf';
+      dom.exportFormatOptions.forEach(opt => { if (opt.checked) format = opt.value; });
 
-    if (format === 'pdf') {
-      if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
-        showToast('Cargando librería PDF, por favor espera un momento y vuelve a exportar...', 'warning');
-        loadJsPdfLib();
-        return;
+      if (format === 'pdf') {
+        if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+          showToast('Cargando librería PDF, por favor espera un momento y vuelve a exportar...', 'warning');
+          loadJsPdfLib();
+          return;
+        }
+        try {
+          readExportPageIndices();
+          if (dom.exportPageSize.value === 'custom') readCustomPaper();
+          if (dom.exportPurpose.value === 'print') buildPrintConfiguration();
+        } catch (error) {
+          showPrintConfigurationError(error);
+          return;
+        }
+        closeExportModal();
+        await generatePdf();
+      } else {
+        try {
+          readExportPageIndices();
+          if (dom.exportPageSize.value === 'custom') readCustomPaper();
+        } catch (error) { showPrintConfigurationError(error); return; }
+        closeExportModal();
+        await generateImages();
       }
-      try {
-        readExportPageIndices();
-        if (dom.exportPurpose.value === 'print') buildPrintConfiguration();
-      } catch (error) {
-        showPrintConfigurationError(error);
-        return;
-      }
-      closeExportModal();
-      await generatePdf();
-    } else {
-      try { readExportPageIndices(); } catch (error) { showPrintConfigurationError(error); return; }
-      closeExportModal();
-      await generateImages();
+    } finally {
+      isExporting = false;
+      dom.btnExportConfirm.disabled = false;
+      if (!dom.exportModal.classList.contains('hidden')) updateExportModalUi();
     }
   }
 
@@ -2584,19 +2671,19 @@ const App = (() => {
         await generatePrintPdf(tab.scannedPages);
         return;
       }
+      if (sizeSelection === 'custom') {
+        const paper = readCustomPaper();
+        const plan = createPrintPlan({ pageIndices: readExportPageIndices(), item: paper, paper,
+          mode: 'single', margin: 0 });
+        await generatePrintPdf(tab.scannedPages, plan);
+        return;
+      }
 
       showToast('Generando PDF, por favor espera...', 'info');
 
       const { jsPDF } = window.jspdf;
       
-      const sizesMm = {
-        'A0': [841, 1189],
-        'A1': [594, 841],
-        'A2': [420, 594],
-        'A3': [297, 420],
-        'A4': [210, 297],
-        'A5': [148, 210]
-      };
+      const sizesMm = { ...ISO_SIZES_MM, ARCH_E: ARCH_E_MM };
       
       let firstPageWidthMm;
       let firstPageHeightMm;
@@ -2702,7 +2789,7 @@ const App = (() => {
 
   function addImageToPrintBox(pdf, page, box, fitMode) {
     const { x, y, width, height } = fitImageToBox(page, box, fitMode);
-    pdf.addImage(page.dataUrl, 'JPEG', x, y, width, height, undefined, 'FAST');
+    pdf.addImage(page.dataUrl, 'JPEG', x, y, width, height, `source-${box.pageIndex}`, 'FAST');
   }
 
   async function saveGeneratedPdf(pdf, fileName) {
@@ -2710,30 +2797,38 @@ const App = (() => {
     showToast('PDF enviado a las descargas del navegador', 'success');
   }
 
-  async function generatePrintPdf(pagesToExport) {
-    const config = buildPrintConfiguration();
+  async function generatePrintPdf(pagesToExport, config = buildPrintConfiguration()) {
+    const sources = pagesToExport.map(({ dataUrl, width, height }) => ({ dataUrl, width, height }));
     const { jsPDF } = window.jspdf;
     const fitMode = Array.from(dom.exportFitOptions).find(option => option.checked)?.value || 'contain';
-    const orientation = config.paper.landscape ? 'landscape' : 'portrait';
     let pdf = null;
 
     showToast('Componiendo PDF con medidas físicas…', 'info');
-    const addSheet = () => {
+    const addSheet = (paper) => {
+      const orientation = paper.landscape ? 'landscape' : 'portrait';
       if (!pdf) {
         pdf = new jsPDF({
           orientation,
           unit: 'mm',
-          format: [config.paper.width, config.paper.height],
+          format: [paper.width, paper.height],
           compress: true
         });
       } else {
-        pdf.addPage([config.paper.width, config.paper.height], orientation);
+        pdf.addPage([paper.width, paper.height], orientation);
       }
     };
 
-    for (const sheet of config.sheets) {
-      addSheet();
-      sheet.items.forEach(box => addImageToPrintBox(pdf, pagesToExport[box.pageIndex], box, fitMode));
+    for (const [index, sheet] of config.sheets.entries()) {
+      addSheet(sheet.paper || config.paper);
+      if (sheet.clip) {
+        pdf.saveGraphicsState();
+        pdf.rect(sheet.clip.x, sheet.clip.y, sheet.clip.width, sheet.clip.height, null);
+        pdf.clip();
+        pdf.discardPath();
+      }
+      sheet.items.forEach(box => addImageToPrintBox(pdf, sources[box.pageIndex], box, fitMode));
+      if (sheet.clip) pdf.restoreGraphicsState();
+      if (index % 5 === 0) await new Promise(resolve => setTimeout(resolve, 0));
     }
 
     if (!pdf) throw new Error('No hay páginas para componer');
@@ -2745,6 +2840,7 @@ const App = (() => {
     const tab = currentTab();
     try {
       const sizeSelection = dom.exportPageSize ? dom.exportPageSize.value : 'A4';
+      const customPaper = sizeSelection === 'custom' ? readCustomPaper() : null;
       
       let fitMode = 'contain';
       dom.exportFitOptions.forEach(opt => { if (opt.checked) fitMode = opt.value; });
@@ -2773,10 +2869,15 @@ const App = (() => {
           'A4': [1240, 1754],
           'A5': [874, 1240]
         };
-        const formatPx = sizesPx[sizeSelection] || sizesPx['A4'];
+        const paper = customPaper;
+        const formatPx = paper ? [paper.width * 150 / 25.4, paper.height * 150 / 25.4]
+          : sizeSelection === 'ARCH_E' ? ARCH_E_MM.map(value => value * 150 / 25.4)
+            : sizesPx[sizeSelection] || sizesPx['A4'];
         
         let pageLandscape = false;
-        if (orientationMode === 'auto') {
+        if (paper) {
+          pageLandscape = false; // The custom width and height already define orientation.
+        } else if (orientationMode === 'auto') {
           pageLandscape = page.width > page.height;
         } else if (orientationMode === 'landscape') {
           pageLandscape = true;

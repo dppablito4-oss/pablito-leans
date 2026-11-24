@@ -1,4 +1,4 @@
-import { getPaperSize, recommendPaper } from './print-sizes.js';
+import { getPaperSize, recommendPaper, validateCanvasSize, PLOTTER_WIDTH_MM } from './print-sizes.js';
 
 function validateNonNegative(value, label) {
   const numeric = Number(value);
@@ -48,6 +48,7 @@ export function calculateGrid({
   if (![width, height].every(value => Number.isFinite(value) && value > 0)) {
     throw new TypeError('El tamaño final debe ser positivo');
   }
+  validateCanvasSize(width, height);
 
   const normal = gridVariant(sheet, width, height, marginMm, gapMm, false);
   const rotated = allowRotate ? gridVariant(sheet, width, height, marginMm, gapMm, true) : normal;
@@ -112,7 +113,10 @@ export function createPrintPlan({
   let sheet;
   if (paper === 'auto') {
     sheet = recommendPaper(width, blockHeight, marginMm, orientation);
-    if (!sheet) throw new RangeError('Estas medidas no caben en A0. Reduce el tamaño, la escala o los márgenes.');
+    if (!sheet) throw new RangeError('Estas medidas superan A0. Elige un lienzo personalizado de hasta 5 × 5 m.');
+  } else if (typeof paper === 'object' && paper !== null) {
+    validateCanvasSize(paper.width, paper.height);
+    sheet = { ...paper, landscape: paper.width > paper.height };
   } else {
     sheet = getPaperSize(paper, orientation === 'landscape');
     if (orientation === 'auto') {
@@ -125,7 +129,7 @@ export function createPrintPlan({
     const suggested = recommendPaper(width, blockHeight, marginMm, orientation);
     throw new RangeError(suggested
       ? `No cabe ${mode === 'dni' ? 'el DNI completo' : 'la pieza'} en ${sheet.name}. Prueba ${suggested.name} ${suggested.landscape ? 'horizontal' : 'vertical'} o reduce la escala.`
-      : 'Estas medidas no caben en A0. Reduce el tamaño, la escala o los márgenes.');
+      : 'La pieza no cabe. Aumenta el lienzo personalizado (hasta 5 × 5 m), reduce el margen o ajusta la pieza.');
   }
 
   const capacity = ['single', 'dni'].includes(mode) ? 1 : layout.capacity;
@@ -167,6 +171,50 @@ export function createPrintPlan({
   }
   return { item: { width, height }, paper: sheet, layout, mode, capacity,
     copiesPerSource, totalItems, sheets, margin: marginMm, gap: gapMm };
+}
+
+// Split only the physical coordinates, keeping the original image and its scale.
+// Each output page carries its own paper size and a clip region in page millimeters.
+export function createOutputPlan(plan, { output = 'full', overlap = 5, tileMargin = 5 } = {}) {
+  if (!['full', 'plotter', 'A4', 'A3', 'ARCH_E'].includes(output)) throw new RangeError('Salida de impresión no válida.');
+  if (output === 'full') return plan;
+  const overlapMm = validateNonNegative(overlap, 'Solape');
+  const edge = output === 'plotter' ? 0 : validateNonNegative(tileMargin, 'Margen de montaje');
+  if (overlapMm > 50 || edge > 50) throw new RangeError('El solape y el margen de montaje deben estar entre 0 y 50 mm.');
+  const paper = output === 'plotter'
+    ? { name: 'Plóter 90 cm', width: Math.min(PLOTTER_WIDTH_MM, plan.paper.width), height: plan.paper.height }
+    : getPaperSize(output);
+  paper.landscape = paper.width > paper.height;
+  const usableWidth = paper.width - 2 * edge;
+  const usableHeight = paper.height - 2 * edge;
+  if (overlapMm >= usableWidth || overlapMm >= usableHeight) {
+    throw new RangeError('El solape debe ser menor que el área útil de la hoja.');
+  }
+  const columns = Math.max(1, Math.ceil((plan.paper.width - overlapMm - 1e-9) / (usableWidth - overlapMm)));
+  const rows = Math.max(1, Math.ceil((plan.paper.height - overlapMm - 1e-9) / (usableHeight - overlapMm)));
+  if (columns * rows * plan.sheets.length > 500 || columns * rows * plan.totalItems > 10000) {
+    throw new RangeError('El montaje supera 500 hojas o 10 000 piezas. Usa papel mayor o reduce las páginas.');
+  }
+  const sheets = [];
+  for (const [sourceIndex, source] of plan.sheets.entries()) {
+    for (let row = 0; row < rows; row++) {
+      for (let column = 0; column < columns; column++) {
+        const originX = column * (usableWidth - overlapMm);
+        const originY = row * (usableHeight - overlapMm);
+        const clip = { x: edge, y: edge,
+          width: Math.min(usableWidth, plan.paper.width - originX),
+          height: Math.min(usableHeight, plan.paper.height - originY) };
+        const items = source.items
+          .filter(box => box.x < originX + clip.width && box.x + box.width > originX &&
+            box.y < originY + clip.height && box.y + box.height > originY)
+          .map(box => ({ ...box, x: box.x - originX + edge, y: box.y - originY + edge }));
+        const sheetPaper = output === 'plotter'
+          ? { ...paper, width: clip.width, landscape: clip.width > paper.height } : paper;
+        sheets.push({ items, paper: sheetPaper, clip, sourceIndex, row, column });
+      }
+    }
+  }
+  return { ...plan, sheets, output, overlap: overlapMm, tileMargin: edge, columns, rows };
 }
 
 export function fitImageToBox(page, box, fitMode = 'contain') {

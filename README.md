@@ -30,6 +30,8 @@ Herramienta web estática que permite escanear documentos directamente desde el 
   mediante el administrador de descargas del navegador
 - 📐 **Composición de impresión** con DNI, escala 195%, medidas personalizadas,
   recomendación A0–A5, vista previa de cada hoja y cuadrículas de varias copias
+- 📏 **Lienzo libre hasta 5 × 5 m**, con PDF de medidas reales (por ejemplo,
+  80 × 200 cm), ARCH E y montaje en tramos de plóter de hasta 90 cm o mosaico A4/A3
 - 🗂️ **Rellenado por página o por archivo**: repite cada original en su propia hoja
   o reúne originales distintos en las hojas necesarias, conservando sus medidas
 - 🪪 **DNI con dos caras**: anverso arriba y reverso debajo en la misma hoja,
@@ -113,6 +115,27 @@ La vista previa permite recorrer las hojas y muestra el total real del archivo
 exportado. Sus números y guías no se imprimen. Elige **tamaño real / 100%** en el
 diálogo de impresión para conservar las medidas. La composición se exporta en
 PDF; la descarga de imágenes conserva su funcionamiento habitual.
+
+En **Tamaño de Hoja / Lienzo → Personalizado** escribe cualquier ancho y alto en
+mm, cm, metros o pulgadas, hasta 5 metros por lado. Estas medidas definen la
+página real del PDF y conservan el orden ancho × alto. En modo Documento, cada
+imagen se ajusta directamente al lienzo. En modo Impresión, **Usar todo el lienzo
+para cada página** iguala el tamaño de la pieza al lienzo y pone el margen en 0.
+También puedes definir la pieza primero y pulsar **Crear lienzo con esta medida**.
+La escala de las piezas también se valida contra el límite de 5 metros.
+
+**Preparar para imprimir** permite descargar el lienzo completo, dividirlo en
+tramos de hasta **90 cm de ancho** para el plóter o montarlo con hojas A4, A3 o
+ARCH E. ARCH E mide 914.4 × 1219.2 mm: su ancho supera los 90 cm de este equipo.
+El solape es ajustable y los mosaicos incluyen un margen blanco por hoja. Las
+hojas se recorren de izquierda a derecha y de arriba abajo; la vista previa indica
+fila y columna. Imprime siempre a **tamaño real / 100%** y verifica que el equipo
+admita el largo elegido. El montaje conserva las dimensiones, sin reducirlas.
+
+El lienzo grande no crea una imagen gigante en memoria: la vista previa tiene
+como máximo 1000 píxeles por lado y el PDF reutiliza las imágenes originales.
+La salida se limita a 500 hojas o 10 000 colocaciones de piezas. El JPG se limita
+a 4096 px / 16 MP; usa PDF cuando necesites conservar las medidas físicas.
 
 ## Editar y descargar
 

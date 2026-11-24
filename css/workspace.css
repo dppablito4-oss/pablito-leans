@@ -260,6 +260,44 @@ body[data-workspace="camera"] .document-rail { display: none; }
 .export-preview .print-preview-stage { display: block; padding: 0; flex: 1 0 200px; min-height: 200px; height: clamp(200px, 40dvh, 460px); }
 #print-preview-canvas.pan-zoom-content { max-width: none; max-height: none; box-shadow: var(--paper-shadow); }
 .print-preview-stage .preview-empty { position: absolute; inset: 0; margin: auto; display: grid; place-items: center; padding: 20px; }
+
+/* Keep controls in their own flow, even on narrow screens and short windows. */
+.app-header { height: 68px; min-height: 68px; padding-block: 12px; }
+.tabs-bar { top: 68px; }
+.viewer-toolbar { flex-wrap: wrap; }
+.viewer-page-nav, .viewer-zoom { flex-shrink: 0; }
+.export-dialog .export-workspace { flex: 1 1 auto; min-height: 0; }
+.export-settings > * { flex-shrink: 0; }
+.export-settings label, .print-options-grid label, .custom-size-row label { min-width: 0; }
+.custom-paper-help, #btn-piece-from-canvas { grid-column: 1 / -1; }
+.preview-heading { flex-wrap: wrap; }
+.preview-paper-label { white-space: normal; overflow-wrap: anywhere; }
+.preview-navigation { flex-wrap: wrap; gap: 8px; }
+.export-footer-status { min-width: 0; overflow-wrap: anywhere; }
+.export-dialog .modal-header > div { min-width: 0; }
+.export-dialog .modal-header h3 { overflow-wrap: anywhere; }
+
+@media (max-width: 960px) {
+  .result-main { position: relative; top: auto; z-index: auto; height: 38dvh; min-height: 250px; max-height: 420px; }
+}
+@media (max-width: 900px) {
+  .export-dialog, .export-dialog.is-print { width: calc(100% - 20px); max-width: 580px; max-height: calc(100dvh - 20px); }
+  .export-dialog.is-print .export-workspace { display: block; overflow-y: auto; }
+  .is-print .export-settings { overflow: visible; }
+  .export-preview { border-left: 0; border-top: 1px solid var(--glass-border); overflow: visible; }
+  .export-dialog .modal-footer { flex-wrap: wrap; gap: 10px; }
+  .export-footer-status { flex-basis: 100%; }
+  .export-dialog .modal-footer .btn { flex: 1; }
+}
+@media (max-width: 480px) {
+  .app-header { height: 60px; min-height: 60px; padding-block: 10px; }
+  .tabs-bar { top: 60px; }
+}
+@media (max-height: 540px) {
+  .export-dialog .modal-header, .export-dialog .modal-footer { padding-block: 8px; }
+  .export-dialog .modal-header .section-eyebrow { display: none; }
+  .export-footer-status { font-size: 0.6875rem; }
+}
 @media (max-width: 760px) {
   .export-preview .print-preview-stage { flex: none; height: clamp(220px, 48dvh, 420px); }
   .export-preview .print-preview-stage[data-orientation="landscape"] { height: clamp(180px, 36dvh, 320px); }

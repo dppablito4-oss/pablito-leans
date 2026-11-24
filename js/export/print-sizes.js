@@ -7,6 +7,10 @@ export const ISO_SIZES_MM = Object.freeze({
   A5: Object.freeze([148, 210])
 });
 
+export const MAX_CANVAS_MM = 5000;
+export const PLOTTER_WIDTH_MM = 900;
+export const ARCH_E_MM = Object.freeze([914.4, 1219.2]);
+
 export const PRINT_PRESETS_MM = Object.freeze({
   dni: Object.freeze({ label: 'DNI / tarjeta ID-1', width: 85.6, height: 54 }),
   photo3x4: Object.freeze({ label: 'Foto 3 × 4 cm', width: 30, height: 40 }),
@@ -14,7 +18,7 @@ export const PRINT_PRESETS_MM = Object.freeze({
   square5: Object.freeze({ label: 'Cuadrado 5 × 5 cm', width: 50, height: 50 })
 });
 
-const UNIT_TO_MM = Object.freeze({ mm: 1, cm: 10, in: 25.4 });
+const UNIT_TO_MM = Object.freeze({ mm: 1, cm: 10, m: 1000, in: 25.4 });
 const PAPER_ORDER = Object.freeze(['A5', 'A4', 'A3', 'A2', 'A1', 'A0']);
 
 export function toMillimeters(value, unit = 'mm') {
@@ -45,6 +49,7 @@ export function resolvePrintSize({ preset = 'dni', width, height, unit = 'mm', s
   }
 
   const multiplier = scaleValue / 100;
+  validateCanvasSize(baseWidth * multiplier, baseHeight * multiplier);
   return {
     width: baseWidth * multiplier,
     height: baseHeight * multiplier,
@@ -52,8 +57,22 @@ export function resolvePrintSize({ preset = 'dni', width, height, unit = 'mm', s
   };
 }
 
+export function validateCanvasSize(width, height) {
+  if (![width, height].every(value => Number.isFinite(value) && value > 0 && value <= MAX_CANVAS_MM)) {
+    throw new RangeError('El ancho y el alto deben ser mayores que 0 y como máximo 5 m (500 cm), incluida la escala.');
+  }
+}
+
+// Custom dimensions describe the actual PDF page; never infer its orientation from the image.
+export function getCustomPaper({ width, height, unit = 'cm' }) {
+  const widthMm = toMillimeters(width, unit);
+  const heightMm = toMillimeters(height, unit);
+  validateCanvasSize(widthMm, heightMm);
+  return { name: 'Personalizado', width: widthMm, height: heightMm, landscape: widthMm > heightMm };
+}
+
 export function getPaperSize(name, landscape = false) {
-  const paper = ISO_SIZES_MM[name];
+  const paper = name === 'ARCH_E' ? ARCH_E_MM : ISO_SIZES_MM[name];
   if (!paper) throw new RangeError('Tamaño de papel desconocido');
   return landscape
     ? { name, width: paper[1], height: paper[0], landscape: true }
