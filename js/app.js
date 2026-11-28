@@ -10,6 +10,7 @@ import { fitImageDimensions, parsePageRange } from './utils.js';
 import { resolvePrintSize, getCustomPaper, getPaperSize } from './export/print-sizes.js';
 import { createPrintPlan, createOutputPlan, fitImageToBox } from './export/layout-calculator.js';
 import { downloadBlob } from './export/download.js';
+import { encodeJpeg } from './export/jpeg.js';
 import { NEUTRAL_ADJUSTMENTS, normalizeAdjustments } from './image-adjustments.js';
 import { createPanZoomViewport } from './pan-zoom.js';
 
@@ -24,11 +25,14 @@ const App = (() => {
   const MAX_FILE_BYTES = 50 * 1024 * 1024;
   const MAX_ESTIMATED_TAB_BYTES = 200 * 1024 * 1024;
   const MAX_ESTIMATED_TOTAL_BYTES = 350 * 1024 * 1024;
-  const EXPORT_DPI = 150;
-  const EXPORT_SIZES_PX = {
+  const ORIGINAL_PDF_DPI = 150;
+  const STANDARD_IMAGE_DPI = 150;
+  const STANDARD_IMAGE_SIZES_PX = {
     A0: [4960, 7016], A1: [3508, 4960], A2: [2480, 3508],
     A3: [1754, 2480], A4: [1240, 1754], A5: [874, 1240]
   };
+  const PREVIEW_MAX_DIMENSION = 1000;
+  const MAX_PREVIEW_IMAGES = 12;
   let tabIdCounter = 0;
 
   // ======== State ========
@@ -192,6 +196,7 @@ const App = (() => {
     dom.exportFit = document.getElementById('export-fit');
     dom.exportOrientation = document.getElementById('export-orientation');
     dom.exportImageMethod = document.getElementById('export-image-method');
+    dom.exportImageDensity = document.getElementById('export-image-density');
     dom.exportPageRange = document.getElementById('export-page-range');
     dom.exportPageSize = document.getElementById('export-page-size');
     for (const [key, id] of Object.entries({
@@ -238,6 +243,7 @@ const App = (() => {
     dom.exportFieldRow = document.getElementById('export-field-row');
     dom.groupOrientation = document.getElementById('group-orientation');
     dom.groupImageMethod = document.getElementById('group-image-method');
+    dom.groupImageDensity = document.getElementById('group-image-density');
 
     // Manual Adjustments
     dom.manualAdjustments = document.getElementById('manual-adjustments');
@@ -650,6 +656,7 @@ const App = (() => {
     canvas.width = safeSize.width;
     canvas.height = safeSize.height;
     const context = canvas.getContext('2d');
+    context.imageSmoothingQuality = 'high';
     context.drawImage(video, 0, 0, safeSize.width, safeSize.height);
 
     try {
@@ -1069,6 +1076,7 @@ const App = (() => {
     const context = canvas.getContext('2d');
     context.fillStyle = '#FFFFFF';
     context.fillRect(0, 0, safeSize.width, safeSize.height);
+    context.imageSmoothingQuality = 'high';
     context.drawImage(img, 0, 0, safeSize.width, safeSize.height);
     const dataUrl = canvas.toDataURL('image/jpeg', quality);
     canvas.width = 0;
@@ -2333,6 +2341,7 @@ const App = (() => {
     const layout = dom.exportLayoutMode.value;
     dom.groupExportPurpose.classList.toggle('hidden', !isPdf);
     dom.groupImageMethod.classList.toggle('hidden', isPdf);
+    dom.groupImageDensity.classList.toggle('hidden', isPdf || size === 'original');
     dom.groupPrintLayout.classList.toggle('hidden', !isPrint);
     dom.groupPrintOutput.classList.toggle('hidden', !isPrint);
     dom.groupTileOptions.classList.toggle('hidden', output === 'full');
@@ -2440,22 +2449,24 @@ const App = (() => {
     const pages = currentTab().scannedPages;
     const orientation = dom.exportOrientation.value;
     const customPaper = size === 'custom' ? readCustomPaper() : null;
+    const imageDensity = Number(dom.exportImageDensity.value);
     const sheets = indices.map(pageIndex => {
       const page = pages[pageIndex];
       const landscape = orientation === 'auto' ? page.width > page.height : orientation === 'landscape';
       let paper;
       if (size === 'original') {
-        const units = format === 'pdf' ? 25.4 / EXPORT_DPI : 1;
+        const units = format === 'pdf' ? 25.4 / ORIGINAL_PDF_DPI : 1;
         paper = { width: page.width * units, height: page.height * units };
       } else if (format === 'pdf') {
         paper = customPaper || getPaperSize(size, landscape);
       } else {
         const physicalPaper = customPaper || getPaperSize(size, landscape);
-        const pixelSize = EXPORT_SIZES_PX[size];
+        const pixelSize = imageDensity === STANDARD_IMAGE_DPI ? STANDARD_IMAGE_SIZES_PX[size] : null;
         const [width, height] = pixelSize
           ? (landscape ? [pixelSize[1], pixelSize[0]] : pixelSize)
-          : [physicalPaper.width * EXPORT_DPI / 25.4, physicalPaper.height * EXPORT_DPI / 25.4];
-        paper = fitImageDimensions(width, height, MAX_IMAGE_DIMENSION, MAX_IMAGE_PIXELS);
+          : [physicalPaper.width * imageDensity / 25.4, physicalPaper.height * imageDensity / 25.4];
+        const fitted = fitImageDimensions(width, height, MAX_IMAGE_DIMENSION, MAX_IMAGE_PIXELS);
+        paper = { width: fitted.width, height: fitted.height, density: Math.max(1, Math.round(imageDensity * fitted.scale)) };
       }
       return { paper, items: [{ pageIndex, x: 0, y: 0, width: paper.width, height: paper.height }] };
     });
@@ -2488,16 +2499,18 @@ const App = (() => {
         const img = new Image();
         img.onload = () => {
           const thumbnail = document.createElement('canvas');
-          const scale = Math.min(1, 640 / Math.max(img.naturalWidth, img.naturalHeight));
+          const scale = Math.min(1, PREVIEW_MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight));
           thumbnail.width = Math.max(1, Math.round(img.naturalWidth * scale));
           thumbnail.height = Math.max(1, Math.round(img.naturalHeight * scale));
-          thumbnail.getContext('2d').drawImage(img, 0, 0, thumbnail.width, thumbnail.height);
+          const context = thumbnail.getContext('2d');
+          context.imageSmoothingQuality = 'high';
+          context.drawImage(img, 0, 0, thumbnail.width, thumbnail.height);
           resolve(thumbnail);
         };
         img.onerror = () => reject(new Error('No se pudo cargar una imagen de la vista previa.'));
         img.src = page.dataUrl;
       });
-      if (previewImages.size >= 24) previewImages.delete(previewImages.keys().next().value);
+      if (previewImages.size >= MAX_PREVIEW_IMAGES) previewImages.delete(previewImages.keys().next().value);
       previewImages.set(page.dataUrl, pending);
     }
     return previewImages.get(page.dataUrl);
@@ -2519,11 +2532,12 @@ const App = (() => {
     dom.previewCounter.textContent = pageLabel + ' ' + (previewSheetIndex + 1) + ' de ' + count +
       (sheet.clip ? ' · F' + (sheet.row + 1) + ' C' + (sheet.column + 1) : '');
     dom.previewPaperLabel.textContent = measure.format(paper.width) + ' × ' + measure.format(paper.height) + ' ' + units;
+    if (paper.density) dom.previewPaperLabel.textContent += ' · ' + paper.density + ' ppp';
     dom.previewCanvas.classList.remove('hidden');
     dom.previewEmpty.classList.add('hidden');
     dom.previewCanvas.setAttribute('aria-label', dom.previewCounter.textContent + ' · ' + dom.previewPaperLabel.textContent);
 
-    const factor = 1000 / Math.max(paper.width, paper.height);
+    const factor = PREVIEW_MAX_DIMENSION / Math.max(paper.width, paper.height);
     const canvas = dom.previewCanvas;
     canvas.width = Math.max(1, Math.round(paper.width * factor));
     canvas.height = Math.max(1, Math.round(paper.height * factor));
@@ -2531,6 +2545,7 @@ const App = (() => {
     printViewport.setContent(canvas, { width: canvas.width, height: canvas.height, reset: paperKey !== previewPaperKey });
     previewPaperKey = paperKey;
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const pages = exportSession.tab.scannedPages;
@@ -2655,8 +2670,11 @@ const App = (() => {
     for (const [index, sheet] of sheets.entries()) {
       const box = sheet.items[0];
       const page = sources[box.pageIndex];
-      let dataUrl = page.dataUrl;
-      if (config.size !== 'original') {
+      let bytes;
+      if (config.size === 'original') {
+        const response = await fetch(page.dataUrl);
+        bytes = new Uint8Array(await response.arrayBuffer());
+      } else {
         const image = await loadImage(page.dataUrl);
         const canvas = document.createElement('canvas');
         canvas.width = sheet.paper.width;
@@ -2666,18 +2684,18 @@ const App = (() => {
         try {
           context.fillStyle = '#fff';
           context.fillRect(0, 0, canvas.width, canvas.height);
+          context.imageSmoothingQuality = 'high';
           context.drawImage(image, x, y, width, height);
-          dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          bytes = await encodeJpeg(canvas, sheet.paper.density);
         } finally {
           canvas.width = canvas.height = 0;
         }
       }
       if (individual) {
-        const response = await fetch(dataUrl);
-        downloadBlob(await response.blob(), 'pablito-leans-pag-' + (index + 1) + '-' + Date.now() + '.jpg');
+        downloadBlob(new Blob([bytes], { type: 'image/jpeg' }), 'pablito-leans-pag-' + (index + 1) + '-' + Date.now() + '.jpg');
         if (index < sheets.length - 1) await new Promise(resolve => setTimeout(resolve, 600));
       } else {
-        zip.file('pagina_' + (index + 1) + '.jpg', dataUrl.split(',')[1], { base64: true });
+        zip.file('pagina_' + (index + 1) + '.jpg', bytes);
       }
     }
 

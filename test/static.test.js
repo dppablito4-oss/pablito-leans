@@ -111,6 +111,7 @@ test('print composition UI and offline cache include physical layout tools', asy
     'export-print-height',
     'export-print-scale',
     'export-panel',
+    'export-image-density',
     'export-print-image-outlines',
     'print-preview-canvas',
     'preview-paper-label'
@@ -120,4 +121,5 @@ test('print composition UI and offline cache include physical layout tools', asy
   assert.doesNotMatch(html, /id="export-modal-overlay"/);
   assert.match(serviceWorker, /js\/export\/print-sizes\.js/);
   assert.match(serviceWorker, /js\/export\/layout-calculator\.js/);
+  assert.match(serviceWorker, /js\/export\/jpeg\.js/);
 });

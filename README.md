@@ -133,8 +133,9 @@ admita el largo elegido. El montaje conserva las dimensiones, sin reducirlas.
 
 El lienzo grande no crea una imagen gigante en memoria: la vista previa tiene
 como máximo 1000 píxeles por lado y el PDF reutiliza las imágenes originales.
-La salida se limita a 500 hojas o 10 000 colocaciones de piezas. El JPG se limita
-a 4096 px / 16 MP; usa PDF cuando necesites conservar las medidas físicas.
+La salida se limita a 500 hojas o 10 000 colocaciones de piezas. Al ajustar un
+JPG al papel puedes elegir 300 ppp (predeterminado) o 150 ppp. La vista previa
+muestra los píxeles y la resolución resultantes con el límite de 4096 px / 16 MP.
 
 ## Editar y descargar
 

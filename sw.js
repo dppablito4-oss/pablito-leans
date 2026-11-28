@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'pablito-leans-';
-const CACHE_NAME = `${CACHE_PREFIX}v19`;
+const CACHE_NAME = `${CACHE_PREFIX}v20`;
 
 const STATIC_ASSETS = [
   './',
@@ -20,6 +20,7 @@ const STATIC_ASSETS = [
   './js/export/print-sizes.js',
   './js/export/layout-calculator.js',
   './js/export/download.js',
+  './js/export/jpeg.js',
   './jspdf.js',
   './assets/favicon.svg',
   './assets/icon-192.png',
