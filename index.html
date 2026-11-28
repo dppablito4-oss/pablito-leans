@@ -66,9 +66,12 @@
               <button class="page-move" id="btn-page-left" type="button" aria-label="Mover página a la izquierda">←</button>
               <button class="page-move" id="btn-page-right" type="button" aria-label="Mover página a la derecha">→</button>
             </div>
+            <button class="btn btn-secondary rail-add-page hidden" id="btn-add-page-rail" type="button" aria-label="Añadir páginas al documento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Añadir
+            </button>
           </div>
           <div class="pages-strip__list" id="pages-strip-list"></div>
-      <p class="rail-help">Arrastra para ordenar</p>
     </aside>
 
     <!-- STATE 0: Camera -->
@@ -149,15 +152,13 @@
         </div>
         <p class="sr-only" id="corner-keyboard-help">Pulsa del 1 al 4 para elegir una esquina; del 5 al 8 para elegir los bordes superior, derecho, inferior e izquierdo. Usa las flechas para mover y Mayús más flecha para avanzar diez píxeles.</p>
         <div class="crop-toolbox">
-          <span class="section-eyebrow">RECORTAR PÁGINA</span>
-          <h2>Conserva lo que importa</h2>
+          <h2>Recorte</h2>
           <div class="crop-mode-switch" role="group" aria-label="Tipo de recorte">
             <button class="active" type="button" data-crop-mode="perspective" aria-pressed="true">Perspectiva</button>
             <button type="button" data-crop-mode="rectangle" aria-pressed="false">Rectangular</button>
           </div>
           <div class="crop-legend"><span>○ Cuatro esquinas</span><span>━ Cuatro bordes</span></div>
           <button class="btn btn-secondary" id="btn-crop-reset" type="button">Usar imagen completa</button>
-          <p class="field-help">Mueve el centro de un borde para cortar desde arriba, abajo o los lados. El modo rectangular mantiene los lados rectos.</p>
         </div>
         <div class="editor-top-row">
           <span class="page-counter hidden" id="editor-page-counter">1 / 1</span>
@@ -200,47 +201,60 @@
     <!-- STATE 3: Result -->
     <section class="result-zone hidden" id="result-zone" aria-label="Resultado del escaneo">
       <div class="result-main">
-        <div class="viewer-toolbar" aria-label="Controles del documento">
-          <div class="viewer-page-nav">
-            <button id="btn-viewer-prev" type="button" aria-label="Página anterior">‹</button>
-            <label class="viewer-page-field"><span class="sr-only">Página actual</span><input id="viewer-page-number" type="number" min="1" value="1" aria-label="Ir a la página"></label>
-            <span id="viewer-page-total">/ 1</span>
-            <button id="btn-viewer-next" type="button" aria-label="Página siguiente">›</button>
+        <div class="workspace-view" id="document-view">
+          <div class="viewer-toolbar" aria-label="Controles del documento">
+            <div class="viewer-page-nav">
+              <button id="btn-viewer-prev" type="button" aria-label="Página anterior">‹</button>
+              <label class="viewer-page-field"><span class="sr-only">Página actual</span><input id="viewer-page-number" type="number" min="1" value="1" aria-label="Ir a la página"></label>
+              <span id="viewer-page-total">/ 1</span>
+              <button id="btn-viewer-next" type="button" aria-label="Página siguiente">›</button>
+            </div>
+            <select id="document-view-mode" aria-label="Vista del documento"><option value="single">Una página</option><option value="all">Todas las páginas</option></select>
+            <div class="viewer-zoom" role="group" aria-label="Zoom de la página">
+              <button id="btn-zoom-out" type="button" aria-label="Alejar">−</button>
+              <button id="btn-zoom-reset" type="button" title="Ajustar y centrar la página" aria-label="Ajustar y centrar la página">100%</button>
+              <button id="btn-zoom-in" type="button" aria-label="Acercar">+</button>
+            </div>
           </div>
-          <select id="document-view-mode" aria-label="Vista del documento"><option value="single">Una página</option><option value="all">Todas las páginas</option></select>
-          <div class="viewer-zoom" role="group" aria-label="Zoom de la página">
-            <button id="btn-zoom-out" type="button" aria-label="Alejar">−</button>
-            <button id="btn-zoom-reset" type="button" title="Ajustar y centrar la página" aria-label="Ajustar y centrar la página">100%</button>
-            <button id="btn-zoom-in" type="button" aria-label="Acercar">+</button>
+          <div class="result-viewer-scroll" id="result-viewer-scroll" tabindex="0" role="region" aria-label="Lienzo del documento" aria-describedby="viewer-gesture-help">
+            <div id="single-page-view" class="single-page-view">
+              <div class="result-canvas-wrapper" id="result-paper">
+                <canvas id="canvasOutput" role="img" aria-label="Vista previa de la página escaneada"></canvas>
+              </div>
+            </div>
+            <div class="document-pages hidden" id="document-pages" aria-label="Todas las páginas del documento"></div>
+            <button class="compare-button" id="btn-compare" type="button" aria-label="Mantén pulsado para ver la imagen sin filtro">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span>Mantén para ver original</span>
+            </button>
           </div>
+          <p class="sr-only" id="viewer-gesture-help">Arrastra para mover. Usa la rueda o dos dedos para ampliar. En todas las páginas, la rueda desplaza y Control más rueda amplía. Doble clic o 0 para encuadrar. Con el lienzo enfocado, usa +, − y las flechas.</p>
         </div>
-        <div class="result-viewer-scroll" id="result-viewer-scroll" tabindex="0" role="region" aria-label="Lienzo del documento" aria-describedby="viewer-gesture-help">
-        <div id="single-page-view" class="single-page-view">
-        <div class="result-canvas-wrapper" id="result-paper">
-          <canvas id="canvasOutput" role="img" aria-label="Vista previa de la página escaneada"></canvas>
+        <div class="workspace-view hidden" id="export-preview">
+          <div class="viewer-toolbar" aria-label="Controles de la vista previa">
+            <div class="viewer-page-nav">
+              <button type="button" id="preview-prev" aria-label="Hoja anterior">‹</button>
+              <span id="preview-sheet-counter" aria-live="polite">Hoja 1 de 1</span>
+              <button type="button" id="preview-next" aria-label="Hoja siguiente">›</button>
+            </div>
+            <span class="preview-paper-label" id="preview-paper-label"></span>
+            <div class="viewer-zoom" role="group" aria-label="Zoom de la hoja">
+              <button id="btn-preview-zoom-out" type="button" aria-label="Alejar hoja">−</button>
+              <button id="btn-preview-zoom-reset" type="button" title="Ajustar y centrar la hoja" aria-label="Ajustar y centrar la hoja">100%</button>
+              <button id="btn-preview-zoom-in" type="button" aria-label="Acercar hoja">+</button>
+            </div>
+          </div>
+          <div class="result-viewer-scroll" id="print-preview-stage" tabindex="0" role="region" aria-label="Lienzo de exportación" aria-describedby="preview-gesture-help">
+            <canvas id="print-preview-canvas" role="img" aria-label="Vista previa de la hoja"></canvas>
+            <p class="preview-empty hidden" id="preview-empty">Sin vista previa</p>
+          </div>
+          <p class="sr-only" id="preview-gesture-help">Arrastra para mover, usa la rueda o dos dedos para ampliar y pulsa 0 para encuadrar.</p>
         </div>
-        </div>
-        <div class="document-pages hidden" id="document-pages" aria-label="Todas las páginas del documento"></div>
-        <span class="viewer-gesture-hint" id="viewer-gesture-hint" aria-hidden="true">Arrastra · rueda para zoom</span>
-          <button class="compare-button" id="btn-compare" type="button" aria-label="Mantén pulsado para ver la imagen sin filtro">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
-            <span>Mantén para ver original</span>
-          </button>
-        </div>
-        <p class="sr-only" id="viewer-gesture-help">Arrastra para mover. Usa la rueda o dos dedos para ampliar. En todas las páginas, la rueda desplaza y Control más rueda amplía. Doble clic o 0 para encuadrar. Con el lienzo enfocado, usa +, − y las flechas.</p>
       </div>
 
-      <aside class="result-sidebar">
-        <div class="result-tools-scroll">
-        <div class="result-top-row">
-          <div class="result-badge">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            Completado
-          </div>
-          <span class="page-counter hidden" id="page-counter">1 / 1</span>
-        </div>
+      <aside class="result-sidebar" aria-label="Herramientas del documento">
+        <div class="result-tools-scroll" id="edit-settings">
+        <div class="tools-heading"><h2>Editar</h2><p class="sr-only" id="filter-status" role="status"></p></div>
 
         <div class="page-actions">
           <button class="btn btn-secondary" id="btn-readjust" type="button" title="Re-ajustar esquinas">
@@ -250,14 +264,21 @@
             </svg>
             Recortar
           </button>
-          <button class="btn btn-secondary" id="btn-add-page" type="button" title="Agregar otra página">
+          <button class="btn btn-secondary" id="btn-add-page" type="button" title="Añadir imágenes o PDF al documento">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
               <line x1="12" y1="18" x2="12" y2="12"/>
               <line x1="9" y1="15" x2="15" y2="15"/>
             </svg>
-            + Página
+            Añadir páginas
+          </button>
+          <button class="btn btn-secondary" id="btn-duplicate-page" type="button" title="Duplicar la página activa">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="8" y="8" width="12" height="12" rx="2"/>
+              <path d="M16 4H6a2 2 0 0 0-2 2v10"/>
+            </svg>
+            Duplicar hoja
           </button>
           <button class="btn btn-danger" id="btn-delete-page" type="button" title="Eliminar página actual">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -268,24 +289,21 @@
           </button>
         </div>
 
-        <div class="tools-heading"><span class="section-eyebrow">DALE EL ÚLTIMO TOQUE</span><h2>Mejora tu página</h2><p id="filter-status" role="status">Original · sin cambios de color</p></div>
         <section class="document-enhancement" aria-label="Mejora automática del documento">
-          <button id="btn-enhance-document" type="button" class="enhance-button" aria-pressed="false" aria-describedby="enhancement-help">
+          <button id="btn-enhance-document" type="button" class="enhance-button" aria-pressed="false">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 15l3 3 5-6"/></svg>
             <span id="enhance-button-label">Mejorar documento</span>
           </button>
-          <p id="enhancement-help">Equilibra la luz y mejora el contraste del texto conservando el color.</p>
           <div class="slider-group"><label for="adj-document-enhance">Intensidad de mejora <output id="adj-document-enhance-value">0%</output></label><input type="range" id="adj-document-enhance" class="styled-slider" min="0" max="100" value="0"></div>
           <div class="slider-group"><label for="adj-denoise">Reducir ruido <output id="adj-denoise-value">0%</output></label><input type="range" id="adj-denoise" class="styled-slider" min="0" max="100" value="0"></div>
-          <p class="enhancement-note">0% desactiva cada efecto. Compara con el original para elegir la intensidad.</p>
         </section>
-        <div class="filter-heading"><strong>Acabado</strong><span>Se aplica a esta página</span></div>
+        <div class="filter-heading"><strong>Filtros</strong></div>
         <div class="filter-selector filter-selector--primary" id="filter-selector">
-          <button class="filter-option active" data-filter="original" id="filter-original" type="button" aria-pressed="true"><span class="filter-sample" aria-hidden="true"></span><span><strong>Original</strong><small>Sin correcciones</small></span></button>
-          <button class="filter-option" data-filter="auto" id="filter-auto" type="button" aria-pressed="false"><span class="filter-sample" aria-hidden="true"></span><span><strong>Automático</strong><small>Luz equilibrada</small></span></button>
-          <button class="filter-option" data-filter="document" id="filter-document" type="button" aria-pressed="false"><span class="filter-sample" aria-hidden="true"></span><span><strong>Texto B/N</strong><small>Papel blanco</small></span></button>
-          <button class="filter-option" data-filter="whiteboard" id="filter-whiteboard" type="button" aria-pressed="false"><span class="filter-sample" aria-hidden="true"></span><span><strong>Pizarra</strong><small>Trazos más claros</small></span></button>
-          <button class="filter-option" data-filter="color" id="filter-color" type="button" aria-pressed="false"><span class="filter-sample" aria-hidden="true"></span><span><strong>Color natural</strong><small>Conserva los tonos</small></span></button>
+          <button class="filter-option active" data-filter="original" id="filter-original" type="button" aria-pressed="true"><span class="filter-sample" aria-hidden="true"></span><span><strong>Original</strong></span></button>
+          <button class="filter-option" data-filter="auto" id="filter-auto" type="button" aria-pressed="false"><span class="filter-sample" aria-hidden="true"></span><span><strong>Automático</strong></span></button>
+          <button class="filter-option" data-filter="document" id="filter-document" type="button" aria-pressed="false"><span class="filter-sample" aria-hidden="true"></span><span><strong>Texto B/N</strong></span></button>
+          <button class="filter-option" data-filter="whiteboard" id="filter-whiteboard" type="button" aria-pressed="false"><span class="filter-sample" aria-hidden="true"></span><span><strong>Pizarra</strong></span></button>
+          <button class="filter-option" data-filter="color" id="filter-color" type="button" aria-pressed="false"><span class="filter-sample" aria-hidden="true"></span><span><strong>Color natural</strong></span></button>
         </div>
         <details class="advanced-filters">
           <summary>Más filtros y ajustes</summary>
@@ -315,7 +333,6 @@
           <div class="slider-group"><label for="adj-warmth">Temperatura · frío / cálido <output id="adj-warmth-value">Neutra</output></label><input type="range" id="adj-warmth" class="styled-slider" min="-50" max="50" value="0"></div>
           <div class="slider-group"><label for="adj-sharpness">Nitidez <output id="adj-sharpness-value">0%</output></label><input type="range" id="adj-sharpness" class="styled-slider" min="0" max="100" value="0"></div>
           </details>
-          <p class="field-help">Ajustes suaves y reversibles. Mantén «Ver original» para comparar.</p>
         </div>
 
         <button class="btn btn-secondary" id="btn-apply-all" type="button" title="Aplicar filtro a todas">
@@ -329,37 +346,181 @@
         </div>
 
         <div id="result-controls" class="controls-panel">
-
-          <button class="btn btn-primary" id="btn-download" type="button" title="Descargar imágenes">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Imágenes
-          </button>
-          <button class="btn btn-primary" id="btn-download-pdf" type="button" title="Descargar como PDF">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-              <polyline points="10 9 9 9 8 9"/>
-            </svg>
-            PDF
+          <button class="btn btn-primary" id="btn-export" type="button" aria-controls="export-panel export-preview">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Exportar
           </button>
         </div>
+
+        <section class="export-panel hidden" id="export-panel" aria-labelledby="export-panel-title">
+          <header class="export-panel-header">
+            <h2 id="export-panel-title" tabindex="-1">Exportar</h2>
+            <button class="btn btn-secondary" id="btn-export-back" type="button" aria-label="Volver a editar"><span aria-hidden="true">‹</span> Editar</button>
+          </header>
+          <fieldset class="export-settings" id="export-settings" aria-label="Ajustes de exportación">
+            <div class="form-group">
+              <label for="export-format">Formato</label>
+              <select id="export-format" class="form-select">
+                <option value="pdf">PDF</option>
+                <option value="images">Imágenes (JPG)</option>
+              </select>
+            </div>
+            <div class="form-group" id="group-export-purpose">
+              <label for="export-purpose">Diseño</label>
+              <select id="export-purpose" class="form-select">
+                <option value="document">Una página por hoja</option>
+                <option value="print">Composición para imprimir</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="export-page-range">Páginas</label>
+              <input type="text" id="export-page-range" class="form-input" placeholder="Todas" aria-describedby="export-range-help">
+              <span class="sr-only" id="export-range-help">Puedes escribir un rango, por ejemplo 1-3, 5. Vacío incluye todas las páginas.</span>
+            </div>
+            <div class="form-group" id="group-page-size">
+              <label for="export-page-size">Tamaño de hoja</label>
+              <select id="export-page-size" class="form-select">
+                <option value="auto" id="export-page-size-auto">Automático</option>
+                <option value="A4" selected>A4 (210 × 297 mm)</option>
+                <option value="A5">A5 (148 × 210 mm)</option>
+                <option value="A3">A3 (297 × 420 mm)</option>
+                <option value="A2">A2 (420 × 594 mm)</option>
+                <option value="A1">A1 (594 × 841 mm)</option>
+                <option value="A0">A0 (841 × 1189 mm)</option>
+                <option value="ARCH_E">ARCH E (914.4 × 1219.2 mm)</option>
+                <option value="custom">Personalizado</option>
+                <option value="original">Original</option>
+              </select>
+              <div class="custom-size-row hidden" id="group-custom-paper">
+                <label for="export-paper-width">Ancho<input type="number" id="export-paper-width" class="form-input" min="0.1" step="any" value="80" inputmode="decimal"></label>
+                <span aria-hidden="true">×</span>
+                <label for="export-paper-height">Alto<input type="number" id="export-paper-height" class="form-input" min="0.1" step="any" value="200" inputmode="decimal"></label>
+                <select id="export-paper-unit" class="form-select" aria-label="Unidad del lienzo"><option value="mm">mm</option><option value="cm" selected>cm</option><option value="m">m</option><option value="in">pulgadas</option></select>
+                <button class="text-button" id="btn-piece-from-canvas" type="button">Usar la hoja completa</button>
+              </div>
+            </div>
+            <div class="export-field-row" id="export-field-row">
+              <div class="form-group" id="group-orientation">
+                <label for="export-orientation">Orientación</label>
+                <select id="export-orientation" class="form-select">
+                  <option value="auto">Automática</option>
+                  <option value="portrait">Vertical</option>
+                  <option value="landscape">Horizontal</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="export-fit">Ajuste</label>
+                <select id="export-fit" class="form-select">
+                  <option value="contain">Proporcional</option>
+                  <option value="cover">Estirar</option>
+                </select>
+              </div>
+            </div>
+            <div class="print-layout-settings hidden" id="group-print-layout">
+              <div class="form-group">
+                <label for="export-layout-mode">Distribución</label>
+                <select id="export-layout-mode" class="form-select">
+                  <option value="single">Una por hoja</option>
+                  <option value="fill">Repetir cada página</option>
+                  <option value="pack" selected>Varias imágenes por hoja</option>
+                  <option value="dni">DNI (anverso y reverso)</option>
+                </select>
+              </div>
+
+              <label class="print-outline-option" id="group-print-image-outlines">
+                <input type="checkbox" id="export-print-image-outlines">
+                Contorno en cada imagen
+              </label>
+
+              <div class="form-group">
+                <label for="export-print-preset">Tamaño de cada imagen</label>
+                <select id="export-print-preset" class="form-select">
+                  <option value="dni">DNI / tarjeta (85.6 × 54 mm)</option>
+                  <option value="photo3x4">Foto 3 × 4 cm</option>
+                  <option value="photo4x4">Foto 4 × 4 cm</option>
+                  <option value="square5" selected>Cuadrado 5 × 5 cm</option>
+                  <option value="custom">Medida personalizada</option>
+                </select>
+              </div>
+
+              <div class="dni-guide hidden" id="group-dni-guide">
+                <button class="text-button" id="btn-dni-swap" type="button">Intercambiar anverso y reverso</button>
+              </div>
+
+              <div class="custom-size-row hidden" id="group-custom-print-size">
+                <label>Ancho <input type="number" id="export-print-width" class="form-input" min="0.1" step="0.1" value="5"></label>
+                <span>×</span>
+                <label>Alto <input type="number" id="export-print-height" class="form-input" min="0.1" step="0.1" value="5"></label>
+                <select id="export-print-unit" class="form-select" aria-label="Unidad de medida">
+                  <option value="mm">mm</option>
+                  <option value="cm" selected>cm</option>
+                  <option value="m">m</option>
+                  <option value="in">pulgadas</option>
+                </select>
+              </div>
+
+              <button class="text-button hidden" id="btn-canvas-from-piece" type="button">Usar esta medida para la hoja</button>
+
+              <div class="print-options-grid">
+                <label>Escala
+                  <span class="input-suffix"><input type="number" id="export-print-scale" class="form-input" min="1" max="1000" step="1" value="100"><span>%</span></span>
+                </label>
+                <label>Margen
+                  <span class="input-suffix"><input type="number" id="export-print-margin" class="form-input" min="0" max="100" step="0.5" value="10"><span>mm</span></span>
+                </label>
+                <label id="group-print-gap">Separación
+                  <span class="input-suffix"><input type="number" id="export-print-gap" class="form-input" min="0" max="100" step="0.5" value="3"><span>mm</span></span>
+                </label>
+                <label id="group-print-copies">Copias por página (0 = llenar)
+                  <input type="number" id="export-print-copies" class="form-input" min="0" max="1000" step="1" value="0" title="0 llena una hoja">
+                </label>
+              </div>
+              <div class="scale-shortcuts" role="group" aria-label="Escalas rápidas">
+                <button class="scale-shortcut active" type="button" data-print-scale="100" aria-pressed="true">100%</button>
+                <button class="scale-shortcut" type="button" data-print-scale="195" aria-pressed="false">195%</button>
+              </div>
+            </div>
+            <div class="form-group hidden" id="group-print-output">
+              <label for="export-print-output">Salida de impresión</label>
+              <select id="export-print-output" class="form-select">
+                <option value="full">Hoja completa</option>
+                <option value="plotter">Plóter (90 cm)</option>
+                <option value="A4">Mosaico en A4</option>
+                <option value="A3">Mosaico en A3</option>
+                <option value="ARCH_E">Mosaico en ARCH E</option>
+              </select>
+              <div class="print-options-grid hidden" id="group-tile-options">
+                <label>Solape entre tramos (mm)<input id="export-tile-overlap" type="number" class="form-input" min="0" max="50" step="any" value="5"></label>
+                <label id="group-tile-margin">Margen de cada hoja (mm)<input id="export-tile-margin" type="number" class="form-input" min="0" max="50" step="any" value="5"></label>
+              </div>
+            </div>
+            <div class="form-group hidden" id="group-image-method">
+              <label for="export-image-method">Descarga</label>
+              <select id="export-image-method" class="form-select">
+                <option value="zip">Archivo ZIP</option>
+                <option value="individual">Archivos JPG</option>
+              </select>
+            </div>
+          </fieldset>
+          <footer class="export-actions">
+            <p class="export-feedback hidden" id="export-feedback" role="status"></p>
+            <button class="btn btn-primary" id="btn-export-confirm" type="button">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              <span id="export-confirm-text">Descargar PDF</span>
+            </button>
+          </footer>
+        </section>
       </aside>
     </section>
 
   </main>
 
   <nav class="flow-nav" id="flow-nav" aria-label="Flujo del escaneo">
-    <button class="flow-step active" data-flow-step="capture" type="button"><span>1</span>Capturar</button>
-    <button class="flow-step" data-flow-step="adjust" type="button" disabled><span>2</span>Ajustar</button>
-    <button class="flow-step" data-flow-step="improve" type="button" disabled><span>3</span>Mejorar</button>
-    <button class="flow-step" data-flow-step="organize" type="button" disabled><span>4</span>Ordenar</button>
-    <button class="flow-step" data-flow-step="export" type="button" disabled><span>5</span>Exportar</button>
+    <button class="flow-step active" data-flow-step="capture" type="button" aria-current="step">Capturar</button>
+    <button class="flow-step" data-flow-step="adjust" type="button" disabled>Recortar</button>
+    <button class="flow-step" data-flow-step="improve" type="button" disabled>Editar</button>
+    <button class="flow-step" data-flow-step="organize" type="button" disabled>Ordenar</button>
+    <button class="flow-step" data-flow-step="export" type="button" disabled>Exportar</button>
   </nav>
 
   <!-- ============ LOADER OVERLAY ============ -->
@@ -382,243 +543,6 @@
       </div>
       <div class="loader-progress">
         <div class="loader-progress__bar"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============ UNIFIED EXPORT MODAL ============ -->
-  <div class="modal-overlay hidden" id="export-modal-overlay" aria-hidden="true">
-    <div class="modal-dialog export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
-      <div class="modal-header">
-        <div><span class="section-eyebrow">EL ÚLTIMO PASO</span><h3 id="export-modal-title">Prepara tu documento</h3></div>
-        <button class="btn-close" id="export-modal-close" type="button" title="Cerrar" aria-label="Cerrar exportación">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-      <div class="modal-body export-workspace">
-        <div class="export-settings">
-        <!-- Export Format -->
-        <div class="form-group">
-          <span class="field-label" id="export-format-label">Formato de archivo</span>
-          <div class="radio-group-horizontal format-selector" role="group" aria-labelledby="export-format-label">
-            <label class="radio-label">
-              <input type="radio" name="export-format" value="pdf" checked>
-              <span>Documento PDF</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="export-format" value="images">
-              <span>Imágenes (JPG)</span>
-            </label>
-          </div>
-        </div>
-
-        <p class="field-help download-help">Tus archivos aparecerán en las descargas del navegador.</p>
-
-        <!-- Page Range -->
-        <div class="form-group">
-          <label for="export-page-range">Páginas a exportar</label>
-          <input type="text" id="export-page-range" class="form-input" placeholder="Ej: 1-3, 5 (Vacío = Todas)" aria-describedby="export-range-help">
-          <p class="field-help" id="export-range-help">Vacío = todas las páginas del documento.</p>
-        </div>
-
-        <!-- Print Composition -->
-        <div class="form-group" id="group-export-purpose">
-          <label for="export-purpose">Tipo de salida PDF</label>
-          <select id="export-purpose" class="form-select">
-            <option value="document" selected>Documento · una página por hoja</option>
-            <option value="print">Impresión · medidas, copias y DNI</option>
-          </select>
-        </div>
-
-        <div class="print-layout-settings hidden" id="group-print-layout">
-          <div class="form-group">
-            <label for="export-layout-mode">Distribución</label>
-            <select id="export-layout-mode" class="form-select">
-              <option value="single">Una por hoja</option>
-              <option value="fill">Rellenar una hoja por cada página</option>
-              <option value="pack" selected>Todo el archivo en las hojas necesarias</option>
-              <option value="dni">DNI · anverso y reverso juntos</option>
-            </select>
-            <p class="field-help" id="export-layout-help"></p>
-          </div>
-
-          <div class="form-group">
-            <label for="export-print-preset">Tamaño físico de cada pieza</label>
-            <select id="export-print-preset" class="form-select">
-              <option value="dni">DNI / tarjeta (85.6 × 54 mm)</option>
-              <option value="photo3x4">Foto 3 × 4 cm</option>
-              <option value="photo4x4">Foto 4 × 4 cm</option>
-              <option value="square5" selected>Cuadrado 5 × 5 cm</option>
-              <option value="custom">Medida personalizada</option>
-            </select>
-          </div>
-
-          <div class="dni-guide hidden" id="group-dni-guide">
-            <strong>Dos caras. Una misma hoja.</strong>
-            <p>En el orden seleccionado: página 1 = anverso, página 2 = reverso. Con más páginas, se forman pares consecutivos.</p>
-            <button class="text-button" id="btn-dni-swap" type="button">Intercambiar anverso y reverso</button>
-          </div>
-
-          <div class="custom-size-row hidden" id="group-custom-print-size">
-            <label>Ancho <input type="number" id="export-print-width" class="form-input" min="0.1" step="0.1" value="5"></label>
-            <span>×</span>
-            <label>Alto <input type="number" id="export-print-height" class="form-input" min="0.1" step="0.1" value="5"></label>
-            <select id="export-print-unit" class="form-select" aria-label="Unidad de medida">
-              <option value="mm">mm</option>
-              <option value="cm" selected>cm</option>
-              <option value="m">m</option>
-              <option value="in">pulgadas</option>
-            </select>
-          </div>
-
-          <button class="text-button hidden" id="btn-canvas-from-piece" type="button">Crear lienzo con esta medida (sin margen)</button>
-
-          <div class="print-options-grid">
-            <label>Escala
-              <span class="input-suffix"><input type="number" id="export-print-scale" class="form-input" min="1" max="1000" step="1" value="100"><span>%</span></span>
-            </label>
-            <label>Margen
-              <span class="input-suffix"><input type="number" id="export-print-margin" class="form-input" min="0" max="100" step="0.5" value="10"><span>mm</span></span>
-            </label>
-            <label id="group-print-gap">Separación
-              <span class="input-suffix"><input type="number" id="export-print-gap" class="form-input" min="0" max="100" step="0.5" value="3"><span>mm</span></span>
-            </label>
-            <label id="group-print-copies">Copias por página
-              <input type="number" id="export-print-copies" class="form-input" min="0" max="1000" step="1" value="0" title="0 llena una hoja">
-            </label>
-          </div>
-          <p class="field-help hidden" id="print-copies-help">0 = repetir cada página hasta llenar su propia hoja. Un número mayor indica cuántas copias hacer de cada página.</p>
-          <div class="scale-shortcuts" role="group" aria-label="Escalas rápidas">
-            <button class="scale-shortcut active" type="button" data-print-scale="100" aria-pressed="true">Normal · 100%</button>
-            <button class="scale-shortcut" type="button" data-print-scale="195" aria-pressed="false">Ampliado · 195%</button>
-          </div>
-        </div>
-
-        <!-- Page Size -->
-        <div class="form-group" id="group-page-size">
-          <label for="export-page-size">Tamaño de Hoja / Lienzo</label>
-          <select id="export-page-size" class="form-select">
-            <option value="auto" id="export-page-size-auto">Recomendado automáticamente</option>
-            <option value="A4" selected>A4 (210 × 297 mm)</option>
-            <option value="A5">A5 (148 × 210 mm)</option>
-            <option value="A3">A3 (297 × 420 mm)</option>
-            <option value="A2">A2 (420 × 594 mm)</option>
-            <option value="A1">A1 (594 × 841 mm)</option>
-            <option value="A0">A0 (841 × 1189 mm)</option>
-            <option value="ARCH_E">ARCH E (914.4 × 1219.2 mm)</option>
-            <option value="custom">Personalizado · hasta 5 × 5 metros</option>
-            <option value="original">Original (Sin reajustar tamaño)</option>
-          </select>
-          <div class="custom-size-row hidden" id="group-custom-paper">
-            <label for="export-paper-width">Ancho<input type="number" id="export-paper-width" class="form-input" min="0.1" step="any" value="80" inputmode="decimal"></label>
-            <span aria-hidden="true">×</span>
-            <label for="export-paper-height">Alto<input type="number" id="export-paper-height" class="form-input" min="0.1" step="any" value="200" inputmode="decimal"></label>
-            <select id="export-paper-unit" class="form-select" aria-label="Unidad del lienzo"><option value="mm">mm</option><option value="cm" selected>cm</option><option value="m">m</option><option value="in">pulgadas</option></select>
-            <p class="field-help custom-paper-help">Medida real de la página del PDF. Máximo 500 × 500 cm. Ancho y alto se respetan tal como los escribes.</p>
-            <button class="text-button" id="btn-piece-from-canvas" type="button">Usar todo el lienzo para cada página</button>
-          </div>
-        </div>
-
-        <div class="form-group hidden" id="group-print-output">
-          <label for="export-print-output">Preparar para imprimir</label>
-          <select id="export-print-output" class="form-select">
-            <option value="full">Lienzo completo · una página PDF por lienzo</option>
-            <option value="plotter">Plóter · tramos de hasta 90 cm de ancho</option>
-            <option value="A4">Mosaico en A4 · montar a tamaño real</option>
-            <option value="A3">Mosaico en A3 · montar a tamaño real</option>
-            <option value="ARCH_E">Mosaico en ARCH E</option>
-          </select>
-          <p class="field-help" id="print-output-help">El PDF conserva la medida del lienzo. Para el plóter de 90 cm, elige tramos si el ancho la supera. ARCH E mide 91.44 cm de ancho.</p>
-          <div class="print-options-grid hidden" id="group-tile-options">
-            <label>Solape entre tramos (mm)<input id="export-tile-overlap" type="number" class="form-input" min="0" max="50" step="any" value="5"></label>
-            <label id="group-tile-margin">Margen de cada hoja (mm)<input id="export-tile-margin" type="number" class="form-input" min="0" max="50" step="any" value="5"></label>
-          </div>
-        </div>
-
-        <!-- Image Fit -->
-        <div class="form-group" id="group-image-fit">
-          <label>Ajuste de Imagen</label>
-          <div class="radio-group">
-            <label class="radio-label">
-              <input type="radio" name="export-fit" value="contain" checked>
-              <span>Conservar proporciones · sin recortar</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="export-fit" value="cover">
-              <span>Estirar al tamaño exacto</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Orientation -->
-        <div class="form-group" id="group-orientation">
-          <label>Orientación de Hoja</label>
-          <div class="radio-group">
-            <label class="radio-label">
-              <input type="radio" name="export-orientation" value="auto" checked>
-              <span>Automática</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="export-orientation" value="portrait">
-              <span>Vertical</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="export-orientation" value="landscape">
-              <span>Horizontal</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Download Method (Only for Images) -->
-        <div class="form-group hidden" id="group-image-method">
-          <label>Método de Descarga</label>
-          <div class="radio-group">
-            <label class="radio-label">
-              <input type="radio" name="export-image-method" value="zip" checked>
-              <span>Archivo comprimido (ZIP)</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="export-image-method" value="individual">
-              <span>Descargar hoja por hoja (Una por una)</span>
-            </label>
-          </div>
-        </div>
-        </div>
-        <aside class="export-preview" id="export-preview" aria-label="Vista previa de impresión">
-          <div class="preview-heading"><div><span class="section-eyebrow">ANTES DE DESCARGAR</span><h4>Así quedará tu hoja</h4></div><span class="preview-paper-label" id="preview-paper-label">A4</span></div>
-          <div class="print-layout-summary" id="print-layout-summary" aria-live="polite"></div>
-          <div class="preview-viewport-toolbar">
-            <span>Arrastra · rueda para zoom</span>
-            <div class="viewport-zoom" role="group" aria-label="Zoom de la hoja">
-              <button id="btn-preview-zoom-out" type="button" aria-label="Alejar hoja">−</button>
-              <button id="btn-preview-zoom-reset" type="button" title="Ajustar y centrar la hoja" aria-label="Ajustar y centrar la hoja">100%</button>
-              <button id="btn-preview-zoom-in" type="button" aria-label="Acercar hoja">+</button>
-            </div>
-          </div>
-          <div class="print-preview-stage" id="print-preview-stage" tabindex="0" role="region" aria-label="Lienzo de la hoja de impresión" aria-describedby="preview-gesture-help">
-            <canvas id="print-preview-canvas" width="630" height="891" role="img" aria-label="Vista previa de la hoja a imprimir"></canvas>
-            <p class="preview-empty hidden" id="preview-empty">Elige medidas válidas para ver tu hoja.</p>
-          </div>
-          <p class="sr-only" id="preview-gesture-help">Arrastra para mover y usa la rueda o dos dedos para ampliar. Doble clic o 0 para encuadrar la hoja. Con el lienzo enfocado, usa +, − y las flechas. El zoom no cambia las medidas de impresión.</p>
-          <div class="preview-navigation">
-            <button type="button" id="preview-prev" aria-label="Ver hoja anterior">←</button>
-            <span id="preview-sheet-counter" aria-live="polite">Hoja 1 de 1</span>
-            <button type="button" id="preview-next" aria-label="Ver hoja siguiente">→</button>
-          </div>
-          <p class="field-help preview-note">Los números y las guías solo aparecen en la vista previa. Al imprimir, elige tamaño real o escala 100%.</p>
-        </aside>
-      </div>
-      <div class="modal-footer">
-        <p class="export-footer-status" id="export-footer-status" role="status"></p>
-        <button class="btn btn-secondary" id="export-modal-cancel" type="button">Cancelar</button>
-        <button class="btn btn-primary" id="export-modal-confirm" type="button">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          <span id="export-confirm-text">Exportar</span>
-        </button>
       </div>
     </div>
   </div>

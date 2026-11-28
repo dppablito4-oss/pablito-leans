@@ -96,14 +96,14 @@ npm test
 
 ## Preparar hojas para imprimir
 
-Abre **PDF → Tipo de salida PDF → Impresión**. Selecciona las páginas del
-documento y elige una distribución:
+Abre **Exportar**. En **Formato**, elige **PDF** y en **Diseño**, selecciona
+**Composición para imprimir**. Selecciona las páginas y una distribución:
 
 - **Una por hoja**: un original centrado en cada hoja.
-- **Rellenar una hoja por cada página**: repite cada original hasta llenar su
+- **Repetir cada página**: repite cada original hasta llenar su
   propia hoja. Con `Copias por página = 0` se llena una hoja; con un número
   concreto se generan esas copias, continuando en otra hoja cuando sea necesario.
-- **Todo el archivo en las hojas necesarias**: coloca cada original una sola vez,
+- **Varias imágenes por hoja**: coloca cada original una sola vez,
   en orden, sin reducir las medidas. Por ejemplo, a 5 × 5 cm en A4 con margen
   de 10 mm y separación de 3 mm caben 15 piezas: 10 páginas ocupan una hoja
   y 20 ocupan dos.
@@ -111,20 +111,19 @@ documento y elige una distribución:
   ocupa una misma hoja, una cara debajo de la otra. Puedes usar 100%, 195% o una
   escala personalizada. La aplicación avisa si falta una cara o el par no cabe.
 
-La vista previa permite recorrer las hojas y muestra el total real del archivo
-exportado. Sus números y guías no se imprimen. Elige **tamaño real / 100%** en el
-diálogo de impresión para conservar las medidas. La composición se exporta en
-PDF; la descarga de imágenes conserva su funcionamiento habitual.
+El lienzo muestra la vista previa de la salida y las medidas de cada hoja.
+Activa **Contorno en cada imagen** para añadir un borde fino a la composición.
+Elige **tamaño real / 100%** al imprimir para conservar las medidas.
 
-En **Tamaño de Hoja / Lienzo → Personalizado** escribe cualquier ancho y alto en
+En **Tamaño de hoja → Personalizado** escribe cualquier ancho y alto en
 mm, cm, metros o pulgadas, hasta 5 metros por lado. Estas medidas definen la
 página real del PDF y conservan el orden ancho × alto. En modo Documento, cada
-imagen se ajusta directamente al lienzo. En modo Impresión, **Usar todo el lienzo
-para cada página** iguala el tamaño de la pieza al lienzo y pone el margen en 0.
-También puedes definir la pieza primero y pulsar **Crear lienzo con esta medida**.
+imagen se ajusta directamente al lienzo. En una composición, **Usar la hoja
+completa** iguala el tamaño de la pieza al lienzo y pone el margen en 0.
+También puedes definir la pieza primero y pulsar **Usar esta medida para la hoja**.
 La escala de las piezas también se valida contra el límite de 5 metros.
 
-**Preparar para imprimir** permite descargar el lienzo completo, dividirlo en
+**Salida de impresión** permite descargar el lienzo completo, dividirlo en
 tramos de hasta **90 cm de ancho** para el plóter o montarlo con hojas A4, A3 o
 ARCH E. ARCH E mide 914.4 × 1219.2 mm: su ancho supera los 90 cm de este equipo.
 El solape es ajustable y los mosaicos incluyen un margen blanco por hoja. Las

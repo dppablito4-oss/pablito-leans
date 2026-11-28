@@ -127,14 +127,12 @@ body::before { display: none; }
 .result-badge { background: var(--accent-surface); border-color: var(--accent-primary); color: var(--accent-bright); }
 .controls-panel { background: var(--bg-panel); }
 .flow-step.active { color: var(--accent-bright); }
-.flow-step.active span { color: var(--accent-text-on-btn); background: var(--accent-primary); }
 .filter-option.active { background: var(--accent-surface); color: var(--accent-bright); box-shadow: none; }
 .filter-option:not(.active):hover { background: var(--bg-card-hover); }
 .document-enhancement:has(.enhance-button[aria-pressed="true"]) { background: var(--accent-surface); border-color: var(--accent-primary); }
 .advanced-filters { background: var(--bg-card); border-color: var(--border-card); }
 .text-button, .slider-group output { color: var(--accent-primary); }
 .text-button[aria-pressed="true"] { color: var(--accent-bright); }
-.form-input, .form-select, .radio-group, .radio-group-horizontal { background-color: var(--bg-card); border-color: var(--border-card); }
 .form-input::placeholder { color: var(--text-muted); opacity: 1; }
 input, select { accent-color: var(--accent-primary); }
 .styled-slider { border-color: var(--border-card); }
@@ -142,18 +140,11 @@ input, select { accent-color: var(--accent-primary); }
 .styled-slider::-moz-range-thumb { box-shadow: none; background: var(--accent-primary); }
 .styled-slider::-moz-range-track { background: var(--border-card); }
 
-.modal-overlay, .tab-confirm-overlay { background: var(--overlay-bg); }
-.modal-dialog, .tab-confirm-dialog, .toast { background: var(--bg-panel); border-color: var(--border-subtle); }
-.export-dialog .modal-header { background: var(--bg-panel); }
-.export-dialog .modal-footer { background: var(--bg-panel); }
-.export-preview { background: var(--bg-app); }
-.print-preview-stage { background-color: var(--bg-canvas); background-image: radial-gradient(var(--canvas-dot) 0.7px, transparent 0.7px); }
+.tab-confirm-overlay { background: var(--overlay-bg); }
+.tab-confirm-dialog, .toast { background: var(--bg-panel); border-color: var(--border-subtle); }
 .print-layout-settings { background: var(--bg-card); border-color: var(--border-card); }
-.format-selector .radio-label:has(input:checked) { background: var(--accent-surface); color: var(--accent-bright); box-shadow: inset 0 0 0 1px var(--accent-primary); }
 .scale-shortcut:hover, .scale-shortcut.active { background: var(--accent-surface); border-color: var(--accent-primary); color: var(--accent-bright); }
-.dni-guide { background: var(--accent-surface); }
-.is-error, [aria-invalid="true"] { border-color: var(--warning); }
-.print-layout-summary.is-error { background: var(--warning-bg); border-color: var(--warning); }
+[aria-invalid="true"] { border-color: var(--warning); }
 
 .loader-overlay { background: var(--bg-app); }
 .loader-bg-glow { display: none; }
